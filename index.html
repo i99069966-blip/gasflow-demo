@@ -117,6 +117,17 @@ details.settings[open] summary::after { content: "−"; }
 .form .check { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; color: var(--fg); }
 .note { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 0; }
 .camstat { font-size: 12px; color: var(--muted); }
+.camrows { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.camrow { display: grid; grid-template-columns: 88px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.camrow .nm { color: var(--muted); font-size: 13px; }
+.camrow input[type="range"] { width: 100%; accent-color: var(--gold); }
+.camrow .val { font-family: var(--font-data); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; }
+.chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.chip.on { color: var(--gold-ink); background: var(--gold); border-color: var(--gold); }
+.chip.no { opacity: .6; }
+.toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg); }
+.support { font-size: 12px; color: var(--muted); line-height: 1.55; margin: 8px 0 0; }
+.support b { color: var(--fg); font-weight: 600; }
 .camstat b { color: var(--fg); font-weight: 600; }
 </style>
 
@@ -203,6 +214,16 @@ details.settings[open] summary::after { content: "−"; }
         <button type="button" class="btn" id="btn-reset" data-i18n="btn_reset">重置</button>
       </div>
 
+      <div class="card" id="camcard" hidden>
+        <div class="chart-head"><h2 data-i18n="cam_title">相机参数</h2><span class="chip" id="lockchip">—</span></div>
+        <div class="camrows" id="camrows"></div>
+        <div class="actions" style="margin-top:12px">
+          <button type="button" class="btn" id="btn-lock" data-i18n="btn_lock">锁定当前参数</button>
+          <button type="button" class="btn" id="btn-auto" data-i18n="btn_auto">恢复自动</button>
+        </div>
+        <p class="support" id="camsupport"></p>
+      </div>
+
       <div class="card">
         <div class="chart-head">
           <h2 data-i18n="chart_title">响应幅度 |ΔT|（%）</h2>
@@ -286,7 +307,13 @@ const I18N = {
     file_err: '无法播放这个视频文件，请换成 MP4 或 MOV（H.264）。',
     pick_source: '点「摄像头」开始实时检测，或点「导入视频」分析录好的视频。',
     dirs: ['右', '右上', '上', '左上', '左', '左下', '下', '右下'],
-    since: '基线后', ms: '毫秒/帧'
+    since: '基线后', ms: '毫秒/帧',
+    cam_title: '相机参数', btn_lock: '锁定当前参数', btn_auto: '恢复自动',
+    p_exposure: '曝光', p_exptime: '曝光时间', p_iso: 'ISO', p_ev: '曝光补偿', p_wb: '白平衡', p_ct: '色温', p_focus: '对焦', p_fd: '对焦距离', p_zoom: '变焦', p_torch: '补光灯',
+    m_lock: '锁定', st_locked: '已锁定', st_auto: '自动', st_partial: '部分锁定', st_none: '不可锁定',
+    sup_yes: '此浏览器可以控制：', sup_no: '不能控制：', sup_none: '此浏览器不提供任何相机参数控制。',
+    sup_ios: 'iPhone 的 Safari 只开放了白平衡、变焦等少数参数，曝光和对焦无法锁定，这是苹果浏览器的限制。请开启「参考区」补偿曝光变化；要完全锁定，需要用原生 App，或用安卓手机的 Chrome 打开本网页。',
+    params_changed: '相机参数已改变，请重新校准基线。'
   },
   ja: {
     title: 'VOC 流れ可視化', subtitle: 'LSPR 基板 · フレーム差分 · 現在と過去のフレームのみ使用',
@@ -317,7 +344,13 @@ const I18N = {
     file_err: 'この動画は再生できません。MP4 または MOV（H.264）を使ってください。',
     pick_source: '「カメラ」でリアルタイム検出を始めるか、「動画を読み込む」で録画を解析します。',
     dirs: ['右', '右上', '上', '左上', '左', '左下', '下', '右下'],
-    since: 'ベースライン後', ms: 'ms/フレーム'
+    since: 'ベースライン後', ms: 'ms/フレーム',
+    cam_title: 'カメラ設定', btn_lock: '現在の値で固定', btn_auto: '自動に戻す',
+    p_exposure: '露出', p_exptime: '露出時間', p_iso: 'ISO', p_ev: '露出補正', p_wb: 'ホワイトバランス', p_ct: '色温度', p_focus: 'フォーカス', p_fd: 'フォーカス距離', p_zoom: 'ズーム', p_torch: 'ライト',
+    m_lock: '固定', st_locked: '固定済み', st_auto: '自動', st_partial: '一部固定', st_none: '固定不可',
+    sup_yes: 'このブラウザで操作できる項目：', sup_no: '操作できない項目：', sup_none: 'このブラウザはカメラ設定の操作に対応していません。',
+    sup_ios: 'iPhone の Safari ではホワイトバランスやズームなど一部の項目しか操作できず、露出とフォーカスは固定できません（Apple のブラウザの制限）。「参照領域」で露出の変化を補正してください。完全に固定するにはネイティブアプリか、Android の Chrome でこのページを開いてください。',
+    params_changed: 'カメラ設定が変わりました。ベースラインを取り直してください。'
   }
 };
 let lang = 'zh';
@@ -698,7 +731,7 @@ function setCamIdle() { if (source === 'camera' && phase === 'idle') showBanner(
 /* ---------------------------------------------------------------- sources */
 function setSourceButtons() { for (const s of ['sample', 'camera', 'file']) $('src-' + s).setAttribute('aria-pressed', String(source === s)); }
 function setCaption() { $('caption').textContent = source === 'sample' ? tr('cap_sample') : source === 'camera' ? tr('cap_camera') : source === 'file' ? tr('cap_file') + fileName : ''; }
-function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; track = null; } $('camstat').hidden = true; releaseWake(); }
+function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; track = null; } $('camstat').hidden = true; $('camcard').hidden = true; releaseWake(); }
 function playVideoSource(url, kind) {
   stopCamera(); hideBanner(); source = kind; setSourceButtons(); setCaption();
   video.srcObject = null; video.loop = true; video.muted = true; video.src = url; phase = 'idle'; engine = null; lastMediaT = -1; armLoop();
@@ -726,21 +759,114 @@ async function startCamera() {
   if (source !== 'camera') { stream.getTracks().forEach(t => t.stop()); stream = null; return; }
   track = stream.getVideoTracks()[0]; video.srcObject = stream; video.loop = false; armLoop();
   try { await video.play(); } catch (e) {}
-  $('btn-baseline').disabled = false; lockState = ''; updateCamStat(); setCamIdle(); requestWake();
+  $('btn-baseline').disabled = false; lockState = lockStatus(); updateCamStat(); buildCamControls(); setCamIdle(); requestWake();
+}
+/* camera parameters: everything MediaStreamTrack exposes on this browser */
+const MODES = [['exposureMode', 'p_exposure'], ['whiteBalanceMode', 'p_wb'], ['focusMode', 'p_focus']];
+const NUMS = [ // [constraint, label, mode it needs, format]
+  ['exposureTime', 'p_exptime', 'exposureMode', v => (v / 10).toFixed(v < 100 ? 2 : 1) + ' ms'],   // spec unit: 100 µs
+  ['iso', 'p_iso', 'exposureMode', v => Math.round(v)],
+  ['exposureCompensation', 'p_ev', null, v => (v > 0 ? '+' : '') + v.toFixed(1) + ' EV'],
+  ['colorTemperature', 'p_ct', 'whiteBalanceMode', v => Math.round(v) + ' K'],
+  ['focusDistance', 'p_fd', 'focusMode', v => v.toFixed(2) + ' m'],
+  ['zoom', 'p_zoom', null, v => v.toFixed(1) + '×']];
+const camCaps = () => (track && track.getCapabilities) ? track.getCapabilities() : {};
+const camSet = () => (track && track.getSettings) ? track.getSettings() : {};
+const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+async function applyCam(adv) {
+  if (!track || !track.applyConstraints) return false;
+  try { await track.applyConstraints({ advanced: [adv] }); return true; } catch (e) { return false; }
+}
+function paramsChanged() {
+  if (source === 'camera' && phase !== 'idle') { phase = 'idle'; engine = null; lastOut = null; history = []; firstDet = null; updatePanel(0, null); drawOverlay(null); drawChart(); flashBanner(tr('params_changed')); }
 }
 async function lockCamera() {
-  if (!track || !track.applyConstraints) return 'no';
-  const caps = track.getCapabilities ? track.getCapabilities() : {}, st = track.getSettings ? track.getSettings() : {}, adv = {};
-  if (caps.exposureMode && caps.exposureMode.includes('manual')) { adv.exposureMode = 'manual'; if (st.exposureTime) adv.exposureTime = st.exposureTime; }
-  if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes('manual')) { adv.whiteBalanceMode = 'manual'; if (st.colorTemperature) adv.colorTemperature = st.colorTemperature; }
-  if (caps.focusMode && caps.focusMode.includes('manual')) { adv.focusMode = 'manual'; if (st.focusDistance) adv.focusDistance = st.focusDistance; }
-  if (!Object.keys(adv).length) return 'no';
-  try { await track.applyConstraints({ advanced: [adv] }); return adv.exposureMode && adv.whiteBalanceMode ? 'ok' : 'partial'; } catch (e) { return 'no'; }
+  const caps = camCaps(), st = camSet(), adv = {};
+  if ((caps.exposureMode || []).includes('manual')) { adv.exposureMode = 'manual'; if (st.exposureTime) adv.exposureTime = st.exposureTime; if (st.iso) adv.iso = st.iso; }
+  if ((caps.whiteBalanceMode || []).includes('manual')) { adv.whiteBalanceMode = 'manual'; if (st.colorTemperature) adv.colorTemperature = st.colorTemperature; }
+  if ((caps.focusMode || []).includes('manual')) { adv.focusMode = 'manual'; if (st.focusDistance) adv.focusDistance = st.focusDistance; }
+  if (Object.keys(adv).length) await applyCam(adv);
+  return lockStatus();
+}
+async function autoCamera() {
+  const caps = camCaps(), adv = {};
+  for (const [m] of MODES) if ((caps[m] || []).includes('continuous')) adv[m] = 'continuous';
+  if (Object.keys(adv).length) await applyCam(adv);
+  lockState = lockStatus(); buildCamControls(); paramsChanged();
+}
+function lockStatus() {
+  const caps = camCaps(), st = camSet();
+  const can = MODES.filter(([m]) => (caps[m] || []).includes('manual'));
+  if (!can.length) return 'no';
+  const locked = can.filter(([m]) => st[m] === 'manual').length;
+  const expOk = st.exposureMode === 'manual', wbOk = st.whiteBalanceMode === 'manual';
+  return locked === 0 ? 'auto' : (expOk && wbOk ? 'ok' : 'partial');
+}
+function buildCamControls() {
+  const card = $('camcard'), rows = $('camrows');
+  if (source !== 'camera' || !track) { card.hidden = true; return; }
+  card.hidden = false; rows.textContent = '';
+  const caps = camCaps(), st = camSet(), yes = [], no = [];
+  for (const [m, lbl] of MODES) {
+    const opts = caps[m] || [], canLock = opts.includes('manual');
+    (canLock ? yes : no).push(tr(lbl));
+    const row = document.createElement('div'); row.className = 'camrow';
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = tr(lbl);
+    const chip = document.createElement('span'); chip.className = 'chip' + (st[m] === 'manual' ? ' on' : '') + (canLock ? '' : ' no');
+    chip.textContent = canLock ? tr(st[m] === 'manual' ? 'st_locked' : 'st_auto') : tr('st_none');
+    const tg = document.createElement('label'); tg.className = 'toggle';
+    if (canLock) {
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'lock-' + m; cb.checked = st[m] === 'manual';
+      cb.addEventListener('change', async () => {
+        const adv = { [m]: cb.checked ? 'manual' : (opts.includes('continuous') ? 'continuous' : opts[0]) };
+        const cur = camSet();
+        if (cb.checked && m === 'exposureMode' && cur.exposureTime) adv.exposureTime = cur.exposureTime;
+        if (cb.checked && m === 'whiteBalanceMode' && cur.colorTemperature) adv.colorTemperature = cur.colorTemperature;
+        if (cb.checked && m === 'focusMode' && cur.focusDistance) adv.focusDistance = cur.focusDistance;
+        await applyCam(adv); lockState = lockStatus(); buildCamControls(); updateCamStat(); paramsChanged();
+      });
+      tg.append(cb, document.createTextNode(tr('m_lock')));
+    }
+    row.append(nm, chip, tg); rows.append(row);
+  }
+  for (const [c, lbl, mode, fmt] of NUMS) {
+    const r = caps[c]; if (!r || typeof r.min !== 'number' || r.max <= r.min) continue;
+    yes.push(tr(lbl));
+    const row = document.createElement('div'); row.className = 'camrow';
+    const nm = document.createElement('label'); nm.className = 'nm'; nm.textContent = tr(lbl); nm.htmlFor = 'cam-' + c;
+    const rg = document.createElement('input'); rg.type = 'range'; rg.id = 'cam-' + c; rg.min = r.min; rg.max = r.max; rg.step = r.step || (r.max - r.min) / 100;
+    rg.value = typeof st[c] === 'number' ? st[c] : r.min;
+    const val = document.createElement('span'); val.className = 'val'; val.textContent = fmt(+rg.value);
+    rg.addEventListener('input', () => { val.textContent = fmt(+rg.value); });
+    rg.addEventListener('change', async () => {
+      const adv = { [c]: +rg.value }; if (mode) adv[mode] = 'manual';
+      await applyCam(adv); lockState = lockStatus(); buildCamControls(); updateCamStat(); paramsChanged();
+    });
+    row.append(nm, rg, val); rows.append(row);
+  }
+  if (caps.torch) {
+    yes.push(tr('p_torch'));
+    const row = document.createElement('div'); row.className = 'camrow';
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = tr('p_torch');
+    const tg = document.createElement('label'); tg.className = 'toggle';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'cam-torch'; cb.checked = !!st.torch;
+    cb.addEventListener('change', async () => { await applyCam({ torch: cb.checked }); paramsChanged(); });
+    tg.append(cb); row.append(nm, document.createElement('span'), tg); rows.append(row);
+  }
+  const chip = $('lockchip'), ls = lockStatus();
+  chip.className = 'chip' + (ls === 'ok' ? ' on' : ''); chip.textContent = tr({ ok: 'st_locked', partial: 'st_partial', auto: 'st_auto', no: 'st_none' }[ls]);
+  $('btn-lock').disabled = !MODES.some(([m]) => (caps[m] || []).includes('manual'));
+  $('btn-auto').disabled = $('btn-lock').disabled;
+  const sup = $('camsupport'); sup.textContent = '';
+  if (!yes.length) sup.append(tr('sup_none'));
+  else { const b = document.createElement('b'); b.textContent = yes.join('、'); sup.append(tr('sup_yes'), b); if (no.length) sup.append('；' + tr('sup_no') + no.join('、')); }
+  const expLock = (caps.exposureMode || []).includes('manual');
+  if (!expLock && isIOS()) { sup.append(document.createElement('br'), tr('sup_ios')); }
 }
 function updateCamStat() {
   const el = $('camstat'); if (source !== 'camera' || !track) { el.hidden = true; return; }
-  const st = track.getSettings ? track.getSettings() : {};
-  el.innerHTML = (st.width ? st.width + '×' + st.height + (st.frameRate ? ' @ ' + Math.round(st.frameRate) + ' fps' : '') + ' · ' : '') + (lockState ? tr('lock_' + lockState) : '');
+  const st = camSet();
+  el.innerHTML = (st.width ? st.width + '×' + st.height + (st.frameRate ? ' @ ' + Math.round(st.frameRate) + ' fps' : '') + ' · ' : '') + (lockState ? tr('lock_' + (lockState === 'auto' ? 'no' : lockState)) : '');
   el.hidden = false;
 }
 async function requestWake() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} }
@@ -759,9 +885,11 @@ video.addEventListener('loadedmetadata', () => { layoutStage(); });
 window.addEventListener('resize', layoutStage);
 $('btn-baseline').addEventListener('click', async () => {
   hideBanner();
-  if (source === 'camera') { if (!track) return; lockState = await lockCamera(); updateCamStat(); startCameraBaseline(); }
+  if (source === 'camera') { if (!track) return; lockState = await lockCamera(); updateCamStat(); buildCamControls(); startCameraBaseline(); }
   else restartAnalysis();
 });
+$('btn-lock').addEventListener('click', async () => { lockState = await lockCamera(); updateCamStat(); buildCamControls(); paramsChanged(); });
+$('btn-auto').addEventListener('click', autoCamera);
 $('btn-reset').addEventListener('click', () => { hideBanner(); restartAnalysis(); });
 $('btn-play').addEventListener('click', () => {
   if (source === 'camera') return;
@@ -787,7 +915,7 @@ function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(el => { const v = tr(el.dataset.i18n); if (typeof v === 'string') el.textContent = v; });
   $('lang-zh').setAttribute('aria-pressed', String(lang === 'zh')); $('lang-ja').setAttribute('aria-pressed', String(lang === 'ja'));
   $('btn-play').textContent = tr(video.paused && source !== 'camera' ? 'btn_play' : 'btn_pause');
-  setCaption(); updateCamStat(); drawOverlay(lastOut);
+  setCaption(); updateCamStat(); buildCamControls(); drawOverlay(lastOut);
   if (phase !== 'live') setPill(phase); updateDir(lastOut);
 }
 for (const l of ['zh', 'ja']) $('lang-' + l).addEventListener('click', () => { lang = l; try { localStorage.setItem('gasflow.lang', l); } catch (e) {} applyLang(); });
