@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>VOC 流向可视化</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: instrument screen. Camera stage on the left (top on phones), readout panel on the right (below on phones).
+   One deliberate dark look: a lab viewer, with a gold accent taken from the Au film itself. */
+:root {
+  color-scheme: dark;
+  --bg: #0d1215;
+  --surface: #141b1f;
+  --surface-2: #1a2328;
+  --line: #27333a;
+  --fg: #e4ebe8;
+  --muted: #8b9896;
+  --gold: #d6a54a;       /* Au film accent: primary actions, ROI frame */
+  --gold-ink: #1b1406;
+  --live: #4cc2a4;       /* monitoring */
+  --alert: #ff6a55;      /* gas detected */
+  --ref: #7fb6ff;        /* reference region */
+  --font-ui: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Microsoft YaHei", "Yu Gothic UI", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --r: 10px;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 24px;
+}
+.app { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.au-dot { width: 14px; height: 14px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 35%, #f3d58c, var(--gold) 55%, #8a6420); box-shadow: 0 0 10px rgba(214,165,74,.45); }
+.brand h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: .02em; text-wrap: balance; }
+.brand .sub { color: var(--muted); font-size: 12px; margin: 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--surface); }
+.seg button { appearance: none; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
+  padding: 6px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--fg); font-weight: 600; }
+.seg button:focus-visible, .btn:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+main.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+@media (min-width: 900px) { main.layout { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; } }
+
+.stage { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.srcbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.srcbar .seg button { padding: 7px 14px; }
+.caption { color: var(--muted); font-size: 12px; min-width: 0; }
+.viewport-wrap { width: 100%; display: flex; justify-content: center; }
+.viewport { position: relative; background: #000; border-radius: var(--r); overflow: hidden; max-width: 100%; width: 100%; aspect-ratio: 9 / 16; max-height: 60vh; }
+.viewport video, .viewport canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.viewport video { object-fit: fill; }
+.viewport canvas { touch-action: none; cursor: crosshair; }
+.banner { position: absolute; left: 10px; right: 10px; bottom: 10px; padding: 10px 12px; border-radius: 8px;
+  background: rgba(13,18,21,.88); border: 1px solid var(--line); font-size: 13px; line-height: 1.45; }
+.hint { color: var(--muted); font-size: 12px; }
+
+.panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; }
+.status { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; font-weight: 600; font-size: 13px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); }
+.pill i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill[data-phase="baseline"] { color: var(--gold); border-color: rgba(214,165,74,.45); }
+.pill[data-phase="live"] { color: var(--live); border-color: rgba(76,194,164,.45); }
+.pill[data-phase="detect"] { color: #fff; background: var(--alert); border-color: var(--alert); }
+.pill[data-phase="detect"] i { animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .pill[data-phase="detect"] i { animation: none; } }
+.progress { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; margin-top: 10px; }
+.progress span { display: block; height: 100%; width: 0; background: var(--gold); transition: width .1s linear; }
+
+.dirrow { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; align-items: center; }
+.compass { width: 92px; height: 92px; }
+.compass .needle { transition: transform .15s ease-out; transform-origin: 50px 50px; }
+@media (prefers-reduced-motion: reduce) { .compass .needle { transition: none; } }
+.dirtext .lbl { color: var(--muted); font-size: 12px; }
+.dirtext .big { font-family: var(--font-data); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.dirtext .small { color: var(--muted); font-size: 12px; }
+
+.readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin: 0; }
+.readouts div { min-width: 0; }
+.readouts dt { color: var(--muted); font-size: 12px; }
+.readouts dd { margin: 0; font-family: var(--font-data); font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { appearance: none; font: inherit; font-weight: 600; font-size: 14px; border-radius: 8px; padding: 9px 14px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); }
+.btn.primary { background: var(--gold); border-color: var(--gold); color: var(--gold-ink); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.chart-head h2, .card h2 { font-size: 13px; margin: 0; font-weight: 600; }
+.legend { display: flex; gap: 12px; color: var(--muted); font-size: 11px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 2px; margin-right: 5px; vertical-align: middle; background: var(--c); }
+#chart { width: 100%; height: 120px; display: block; }
+
+details.settings summary { cursor: pointer; font-weight: 600; font-size: 13px; list-style: none; display: flex; justify-content: space-between; }
+details.settings summary::-webkit-details-marker { display: none; }
+details.settings summary::after { content: "+"; color: var(--muted); font-family: var(--font-data); }
+details.settings[open] summary::after { content: "−"; }
+.form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; margin-top: 10px; }
+.form label { color: var(--muted); font-size: 13px; }
+.form select, .form input[type="number"] { font: inherit; font-size: 13px; color: var(--fg); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 8px; min-width: 0; }
+.form input[type="number"] { width: 84px; font-family: var(--font-data); }
+.form .check { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; color: var(--fg); }
+.note { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 0; }
+.camstat { font-size: 12px; color: var(--muted); }
+.camstat b { color: var(--fg); font-weight: 600; }
+</style>
+
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="au-dot" aria-hidden="true"></span>
+      <div>
+        <h1 data-i18n="title">VOC 流向可视化</h1>
+        <p class="sub" data-i18n="subtitle">LSPR 基板 · 逐帧差分 · 只用当前帧和过去帧</p>
+      </div>
+    </div>
+    <div class="seg" role="group" aria-label="Language">
+      <button type="button" id="lang-zh" aria-pressed="true">中文</button>
+      <button type="button" id="lang-ja" aria-pressed="false">日本語</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="srcbar">
+        <div class="seg" role="group" aria-label="Source">
+          <button type="button" id="src-sample" aria-pressed="true" data-i18n="src_sample">示例视频</button>
+          <button type="button" id="src-camera" aria-pressed="false" data-i18n="src_camera">摄像头</button>
+          <button type="button" id="src-file" aria-pressed="false" data-i18n="src_file">导入视频</button>
+        </div>
+        <input type="file" id="file" accept="video/*" hidden>
+        <span class="caption" id="caption"></span>
+      </div>
+      <div class="viewport-wrap">
+        <div class="viewport" id="viewport">
+          <video id="video" muted playsinline></video>
+          <canvas id="overlay" aria-label="ROI"></canvas>
+          <div class="banner" id="banner" hidden></div>
+        </div>
+      </div>
+      <div class="hint" data-i18n="hint_roi">拖动金色方框选择基板区域，拖动四角调整大小。</div>
+    </section>
+
+    <aside class="panel">
+      <div class="card">
+        <div class="status">
+          <span class="pill" id="pill" data-phase="idle"><i></i><span id="pill-text">待机</span></span>
+          <span class="camstat" id="time-readout"></span>
+        </div>
+        <div class="progress" id="progress" hidden><span id="progress-bar"></span></div>
+        <div class="camstat" id="camstat" hidden></div>
+      </div>
+
+      <div class="card dirrow">
+        <svg class="compass" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="46" fill="none" stroke="var(--line)" stroke-width="2"></circle>
+          <g stroke="var(--muted)" stroke-width="2">
+            <line x1="50" y1="6" x2="50" y2="14"></line><line x1="50" y1="86" x2="50" y2="94"></line>
+            <line x1="6" y1="50" x2="14" y2="50"></line><line x1="86" y1="50" x2="94" y2="50"></line>
+          </g>
+          <g class="needle" id="needle" opacity="0.25">
+            <polygon points="86,50 58,40 58,60" fill="var(--gold)"></polygon>
+            <line x1="50" y1="50" x2="62" y2="50" stroke="var(--gold)" stroke-width="6" stroke-linecap="round"></line>
+          </g>
+          <circle cx="50" cy="50" r="5" fill="var(--fg)"></circle>
+        </svg>
+        <div class="dirtext">
+          <div class="lbl" id="dir-label">气体流向</div>
+          <div class="big" id="dir-big">—</div>
+          <div class="small" id="dir-small"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <dl class="readouts">
+          <div><dt data-i18n="lbl_peak">峰值 ΔT</dt><dd id="r-peak">—</dd></div>
+          <div><dt data-i18n="lbl_area">响应面积</dt><dd id="r-area">—</dd></div>
+          <div><dt data-i18n="lbl_noise">噪声 / 阈值</dt><dd id="r-noise">—</dd></div>
+          <div><dt data-i18n="lbl_first">首次检测</dt><dd id="r-first">—</dd></div>
+        </dl>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn primary" id="btn-baseline" data-i18n="btn_baseline">校准基线</button>
+        <button type="button" class="btn" id="btn-play" data-i18n="btn_pause">暂停</button>
+        <button type="button" class="btn" id="btn-reset" data-i18n="btn_reset">重置</button>
+      </div>
+
+      <div class="card">
+        <div class="chart-head">
+          <h2 data-i18n="chart_title">响应幅度 |ΔT|（%）</h2>
+          <div class="legend">
+            <span style="--c: var(--gold)" data-i18n="lg_mean">平均</span>
+            <span style="--c: var(--live)" data-i18n="lg_peak">峰值</span>
+          </div>
+        </div>
+        <canvas id="chart"></canvas>
+      </div>
+
+      <details class="card settings" id="settings">
+        <summary data-i18n="set_title">设置</summary>
+        <div class="form">
+          <label for="set-channel" data-i18n="set_channel">颜色通道</label>
+          <select id="set-channel">
+            <option value="r">R</option><option value="g">G</option><option value="b">B</option>
+            <option value="gray" data-i18n="opt_gray">灰度</option>
+          </select>
+          <label for="set-sign" data-i18n="set_sign">响应方向</label>
+          <select id="set-sign">
+            <option value="neg" data-i18n="opt_neg">变暗（透过率下降）</option>
+            <option value="pos" data-i18n="opt_pos">变亮（透过率上升）</option>
+            <option value="abs" data-i18n="opt_abs">两者都算</option>
+          </select>
+          <label for="set-arrow" data-i18n="set_arrow">箭头含义</label>
+          <select id="set-arrow">
+            <option value="flow" data-i18n="opt_flow">气体流向</option>
+            <option value="source" data-i18n="opt_source">指向气源</option>
+          </select>
+          <label for="set-base" data-i18n="set_base">基线时长（秒）</label>
+          <input type="number" id="set-base" min="1" max="20" step="0.1" value="2.8">
+          <label for="set-k" data-i18n="set_k">检测阈值（× 噪声）</label>
+          <input type="number" id="set-k" min="2" max="12" step="0.5" value="4">
+          <label for="set-tau" data-i18n="set_tau">时间平滑 τ（秒）</label>
+          <input type="number" id="set-tau" min="0" max="3" step="0.05" value="0.1">
+          <label class="check"><input type="checkbox" id="set-ref"> <span data-i18n="set_ref">使用参考区（抵消自动曝光）</span></label>
+        </div>
+        <p class="note" style="margin-top:10px" data-i18n="set_note">改动设置后会重新采集基线。</p>
+      </details>
+
+      <p class="note" data-i18n="note">网页版用于演示：iPhone 的浏览器不能锁定曝光和白平衡，读数仅供参考，正式测量请用 App。</p>
+    </aside>
+  </main>
+</div>
+
+<script type="text/plain" id="sample-mp4"></script>
+<script type="text/plain" id="sample-webm"></script>
+<script>
+(() => {
+'use strict';
+
+/* ---------------------------------------------------------------- text */
+const I18N = {
+  zh: {
+    title: 'VOC 流向可视化', subtitle: 'LSPR 基板 · 逐帧差分 · 只用当前帧和过去帧',
+    src_sample: '示例视频', src_camera: '摄像头', src_file: '导入视频',
+    cap_sample: '示例：EXP03 乙醇，iPhone 12 mini（Blackmagic 拍摄），R 通道',
+    cap_camera: '摄像头实时', cap_file: '导入：',
+    hint_roi: '拖动金色方框选择基板区域，拖动四角调整大小。',
+    st_idle: '待机', st_baseline: '采集基线', st_live: '监测中', st_detect: '检测到气体',
+    idle_cam: '把基板放进金色方框，保持手机不动，然后点「校准基线」。基线期间不能有气体。',
+    lbl_peak: '峰值 ΔT', lbl_area: '响应面积', lbl_noise: '噪声 / 阈值', lbl_first: '首次检测',
+    dir_flow: '气体流向', dir_source: '气源方向', dir_wait: '等待气体前锋',
+    btn_baseline: '校准基线', btn_reset: '重置', btn_play: '播放', btn_pause: '暂停',
+    chart_title: '响应幅度 |ΔT|（%）', lg_mean: '平均', lg_peak: '峰值',
+    set_title: '设置', set_channel: '颜色通道', opt_gray: '灰度', set_sign: '响应方向',
+    opt_neg: '变暗（透过率下降）', opt_pos: '变亮（透过率上升）', opt_abs: '两者都算',
+    set_arrow: '箭头含义', opt_flow: '气体流向', opt_source: '指向气源',
+    set_base: '基线时长（秒）', set_k: '检测阈值（× 噪声）', set_tau: '时间平滑 τ（秒）',
+    set_ref: '使用参考区（抵消自动曝光）', set_note: '改动设置后会重新采集基线。',
+    note: '网页版用于演示：iPhone 的浏览器不能锁定曝光和白平衡，读数仅供参考，正式测量请用 App。',
+    roi: '基板', refbox: '参考',
+    cam_denied: '这里打不开摄像头。在 Claude 里预览时浏览器禁止调用摄像头；请把本页面放到 HTTPS 网址（例如 GitHub Pages），再用 iPhone 的 Safari 打开。示例视频和「导入视频」在这里可以正常使用。',
+    cam_starting: '正在打开摄像头…',
+    lock_ok: '曝光 / 白平衡：<b>已锁定</b>', lock_partial: '曝光 / 白平衡：<b>部分锁定</b>，建议开启参考区',
+    lock_no: '曝光 / 白平衡：<b>此浏览器无法锁定</b>，建议开启参考区',
+    roi_changed: '区域已更改，重新采集基线。',
+    base_short: '基线帧数太少，请延长基线时长。',
+    play_blocked: '点「播放」开始示例。',
+    file_err: '无法播放这个视频文件，请换成 MP4 或 MOV（H.264）。',
+    pick_source: '点「摄像头」开始实时检测，或点「导入视频」分析录好的视频。',
+    dirs: ['右', '右上', '上', '左上', '左', '左下', '下', '右下'],
+    since: '基线后', ms: '毫秒/帧'
+  },
+  ja: {
+    title: 'VOC 流れ可視化', subtitle: 'LSPR 基板 · フレーム差分 · 現在と過去のフレームのみ使用',
+    src_sample: 'サンプル動画', src_camera: 'カメラ', src_file: '動画を読み込む',
+    cap_sample: 'サンプル：EXP03 エタノール、iPhone 12 mini（Blackmagic で撮影）、R チャンネル',
+    cap_camera: 'カメラ（リアルタイム）', cap_file: '読み込み：',
+    hint_roi: '金色の枠をドラッグして基板の範囲を選び、四隅で大きさを調整します。',
+    st_idle: '待機', st_baseline: 'ベースライン取得中', st_live: '監視中', st_detect: 'ガス検出',
+    idle_cam: '基板を金色の枠に入れ、スマホを動かさずに「ベースライン取得」を押してください。取得中はガスを流さないでください。',
+    lbl_peak: 'ピーク ΔT', lbl_area: '応答面積', lbl_noise: 'ノイズ / しきい値', lbl_first: '初回検出',
+    dir_flow: 'ガスの流れ', dir_source: 'ガス源の方向', dir_wait: 'ガスの前線を待機中',
+    btn_baseline: 'ベースライン取得', btn_reset: 'リセット', btn_play: '再生', btn_pause: '一時停止',
+    chart_title: '応答の大きさ |ΔT|（%）', lg_mean: '平均', lg_peak: 'ピーク',
+    set_title: '設定', set_channel: '色チャンネル', opt_gray: 'グレー', set_sign: '応答の向き',
+    opt_neg: '暗くなる（透過率低下）', opt_pos: '明るくなる（透過率上昇）', opt_abs: '両方',
+    set_arrow: '矢印の意味', opt_flow: 'ガスの流れ', opt_source: 'ガス源を指す',
+    set_base: 'ベースライン時間（秒）', set_k: '検出しきい値（× ノイズ）', set_tau: '時間平滑 τ（秒）',
+    set_ref: '参照領域を使う（自動露出の補正）', set_note: '設定を変えるとベースラインを取り直します。',
+    note: 'Web 版はデモ用です：iPhone のブラウザでは露出とホワイトバランスを固定できないため、数値は参考値です。正式な測定はアプリで行います。',
+    roi: '基板', refbox: '参照',
+    cam_denied: 'ここではカメラを使えません。Claude のプレビュー内ではブラウザがカメラを禁止しています。このページを HTTPS のアドレス（GitHub Pages など）に置き、iPhone の Safari で開いてください。サンプル動画と「動画を読み込む」はここでも使えます。',
+    cam_starting: 'カメラを起動中…',
+    lock_ok: '露出 / ホワイトバランス：<b>固定済み</b>', lock_partial: '露出 / ホワイトバランス：<b>一部のみ固定</b>。参照領域の使用を推奨',
+    lock_no: '露出 / ホワイトバランス：<b>このブラウザでは固定できません</b>。参照領域の使用を推奨',
+    roi_changed: '範囲を変更しました。ベースラインを取り直します。',
+    base_short: 'ベースラインのフレームが足りません。時間を長くしてください。',
+    play_blocked: '「再生」を押すとサンプルが始まります。',
+    file_err: 'この動画は再生できません。MP4 または MOV（H.264）を使ってください。',
+    pick_source: '「カメラ」でリアルタイム検出を始めるか、「動画を読み込む」で録画を解析します。',
+    dirs: ['右', '右上', '上', '左上', '左', '左下', '下', '右下'],
+    since: 'ベースライン後', ms: 'ms/フレーム'
+  }
+};
+let lang = 'zh';
+try { const s = localStorage.getItem('gasflow.lang'); if (s === 'zh' || s === 'ja') lang = s; else if ((navigator.language || '').startsWith('ja')) lang = 'ja'; } catch (e) {}
+const tr = k => (I18N[lang] && I18N[lang][k] !== undefined) ? I18N[lang][k] : I18N.zh[k];
+
+/* ---------------------------------------------------------------- settings */
+const cfg = { channel: 'r', sign: 'neg', arrowMode: 'flow', baselineSec: 2.8, k: 4, tau: 0.1, hold: 0.1,
+  sigma: 1, minFrac: 0.02, cohMin: 0.15, arrowTau: 0.5, grid: 64, useRef: false, cover: 0.9 };
+// ROI / reference box in normalized frame coordinates. Default ROI = the EXP03 substrate.
+let roi = { x0: 0.056, y0: 0.102, x1: 0.833, y1: 0.625 };
+let ref = { x0: 0.06, y0: 0.66, x1: 0.30, y1: 0.74 };
+
+/* ---------------------------------------------------------------- numeric core (same as causal_gas_flow.py) */
+const alphaOf = (tau, dt) => tau <= 0 ? 1 : 1 - Math.exp(-dt / tau);
+function gaussKernel(sigma) {
+  if (sigma <= 0) return new Float32Array([1]);
+  const r = Math.max(1, Math.round(sigma * 4)); const k = new Float32Array(2 * r + 1); let s = 0;
+  for (let i = -r; i <= r; i++) { const v = Math.exp(-(i * i) / (2 * sigma * sigma)); k[i + r] = v; s += v; }
+  for (let i = 0; i < k.length; i++) k[i] /= s; return k;
+}
+function refl(i, n) { if (n === 1) return 0; while (i < 0 || i >= n) i = i < 0 ? -i - 1 : 2 * n - i - 1; return i; }
+function blur(src, w, h, k, tmp, out) {
+  const r = (k.length - 1) >> 1;
+  for (let y = 0; y < h; y++) { const row = y * w;
+    for (let x = 0; x < w; x++) { let s = 0; for (let j = -r; j <= r; j++) s += k[j + r] * src[row + refl(x + j, w)]; tmp[row + x] = s; } }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let s = 0; for (let j = -r; j <= r; j++) s += k[j + r] * tmp[refl(y + j, h) * w + x]; out[y * w + x] = s; }
+  return out;
+}
+function sobel(p, w, h, gx, gy) {
+  for (let y = 0; y < h; y++) { const ym = refl(y - 1, h) * w, y0 = y * w, yp = refl(y + 1, h) * w;
+    for (let x = 0; x < w; x++) { const xm = refl(x - 1, w), xp = refl(x + 1, w);
+      gx[y0 + x] = ((p[ym + xp] - p[ym + xm]) + 2 * (p[y0 + xp] - p[y0 + xm]) + (p[yp + xp] - p[yp + xm])) / 8;
+      gy[y0 + x] = ((p[yp + xm] - p[ym + xm]) + 2 * (p[yp + x] - p[ym + x]) + (p[yp + xp] - p[ym + xp])) / 8; } }
+}
+function dilate3(src, w, h) {
+  const out = new Float32Array(src.length);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = -Infinity;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const v = src[refl(y + dy, h) * w + refl(x + dx, w)]; if (v > m) m = v; }
+    out[y * w + x] = m; }
+  return out;
+}
+function median(a) { const s = Float32Array.from(a).sort(); const n = s.length; if (!n) return 0; return n % 2 ? s[(n - 1) >> 1] : 0.5 * (s[n / 2 - 1] + s[n / 2]); }
+
+class Engine {
+  constructor(gw, gh, c) {
+    this.gw = gw; this.gh = gh; this.n = gw * gh; this.c = Object.assign({}, c);
+    this.k1 = gaussKernel(c.sigma); this.k10 = gaussKernel(1.0);
+    const n = this.n; this.tmp = new Float32Array(n); this.dbuf = new Float32Array(n); this.rel = new Float32Array(n);
+    this.R = new Float32Array(n); this.z = new Float32Array(n); this.mask = new Uint8Array(n);
+    this.gx = new Float32Array(n); this.gy = new Float32Array(n); this.bl = new Float32Array(n); this.T = new Float32Array(n);
+    this.base = []; this.bt = []; this.bref = []; this.ready = false; this.arrow = null; this.tCover = null; this.lastT = null;
+  }
+  dT(g, gain, out) { const mu = this.mu0, d = this.rel; for (let i = 0; i < this.n; i++) d[i] = (g[i] / gain) / mu[i] - 1; return blur(d, this.gw, this.gh, this.k1, this.tmp, out); }
+  addBaseline(g, t, rv) { this.base.push(Float32Array.from(g)); this.bt.push(t); this.bref.push(rv); }
+  finishBaseline() {
+    const N = this.base.length, n = this.n; if (N < 10) return false;
+    this.refMu0 = this.c.useRef ? this.bref.reduce((a, b) => a + b, 0) / N : 1;
+    const gains = this.bref.map(r => this.c.useRef ? r / this.refMu0 : 1);
+    const mu = new Float32Array(n);
+    for (let f = 0; f < N; f++) { const g = this.base[f], q = gains[f]; for (let i = 0; i < n; i++) mu[i] += g[i] / q; }
+    for (let i = 0; i < n; i++) mu[i] = Math.max(mu[i] / N, 1e-3);
+    this.mu0 = mu;
+    const dt = N > 1 ? Math.max(1e-3, (this.bt[N - 1] - this.bt[0]) / (N - 1)) : 1 / 30; this.dtNom = dt;
+    const a = alphaOf(this.c.tau, dt);
+    // per-frame noise on unsmoothed dT (independent samples), then scaled by the EMA factor; EMA replay as a floor
+    const D = this.base.map((g, f) => this.dT(g, gains[f], new Float32Array(n)));
+    const m = new Float32Array(n); for (const d of D) for (let i = 0; i < n; i++) m[i] += d[i];
+    for (let i = 0; i < n; i++) m[i] /= N;
+    const sd = new Float32Array(n);
+    for (const d of D) for (let i = 0; i < n; i++) { d[i] -= m[i]; sd[i] += d[i] * d[i]; }
+    for (let i = 0; i < n; i++) sd[i] = Math.sqrt(sd[i] / N);
+    const cellRaw = dilate3(sd, this.gw, this.gh);
+    const sigRaw = median(cellRaw), f = Math.sqrt(a / (2 - a));
+    const S = new Float32Array(n), sq = new Float32Array(n); const skip = Math.min(N >> 1, Math.round(1 / a)); let cnt = 0;
+    D.forEach((d, idx) => { for (let i = 0; i < n; i++) S[i] = a * d[i] + (1 - a) * S[i];
+      if (idx >= skip) { for (let i = 0; i < n; i++) sq[i] += S[i] * S[i]; cnt++; } });
+    for (let i = 0; i < n; i++) sq[i] = Math.sqrt(sq[i] / Math.max(cnt, 1));
+    const floor = Math.max(sigRaw * f, median(sq), 1e-5);
+    this.noiseMap = cellRaw.map(v => Math.max(v * f, floor));
+    this.noise = median(this.noiseMap); this.noiseRaw = sigRaw;
+    this.S = new Float32Array(n); this.runStart = new Float32Array(n).fill(NaN); this.arrival = new Float32Array(n).fill(NaN);
+    this.base = null; this.ready = true; return true;
+  }
+  update(g, t, rv) {
+    const c = this.c, n = this.n;
+    const dt = this.lastT == null ? this.dtNom : Math.min(1, Math.max(1e-3, t - this.lastT)); this.lastT = t;
+    const a = alphaOf(c.tau, dt), gain = c.useRef ? rv / this.refMu0 : 1;
+    const d = this.dT(g, gain, this.dbuf), S = this.S, R = this.R, z = this.z, mask = this.mask;
+    let cntMask = 0, rmax = 0, rsum = 0;
+    for (let i = 0; i < n; i++) {
+      S[i] = a * d[i] + (1 - a) * S[i];
+      const r = c.sign === 'pos' ? S[i] : c.sign === 'neg' ? -S[i] : Math.abs(S[i]);
+      R[i] = r; rsum += r; z[i] = r / this.noiseMap[i];
+      const above = z[i] > c.k;
+      if (!above) this.runStart[i] = NaN; else if (Number.isNaN(this.runStart[i])) this.runStart[i] = t;
+      const on = above && (t - this.runStart[i]) >= c.hold - 1e-9;
+      mask[i] = on ? 1 : 0;
+      if (on) { cntMask++; if (r > rmax) rmax = r; if (Number.isNaN(this.arrival[i])) this.arrival[i] = this.runStart[i]; }
+    }
+    const frac = cntMask / n, detected = frac >= c.minFrac;
+    const grad = this.gradDir(cntMask), arr = this.arrivalDir(t, frac);
+    const dd = arr; // arrival-time method drives the arrow (front clearly visible on this sensor)
+    const show = detected && dd && dd[2] >= c.cohMin;
+    if (show) { const beta = alphaOf(c.arrowTau, dt);
+      if (!this.arrow) this.arrow = [dd[0], dd[1]];
+      else { const vx = beta * dd[0] + (1 - beta) * this.arrow[0], vy = beta * dd[1] + (1 - beta) * this.arrow[1];
+        const nn = Math.hypot(vx, vy) || 1; this.arrow = [vx / nn, vy / nn]; } }
+    return { frac, detected, rmax, mean: rsum / n, grad, arr, arrow: show ? this.arrow : null };
+  }
+  gradDir(cntMask) {
+    if (cntMask < 4) return null; const n = this.n;
+    const Rs = blur(this.R, this.gw, this.gh, this.k10, this.tmp, this.bl); sobel(Rs, this.gw, this.gh, this.gx, this.gy);
+    let ws = 0, vx = 0, vy = 0, mag = 0;
+    for (let i = 0; i < n; i++) if (this.mask[i]) { const w = this.z[i]; ws += w; vx += w * this.gx[i]; vy += w * this.gy[i]; mag += w * Math.hypot(this.gx[i], this.gy[i]); }
+    vx /= ws; vy /= ws; mag /= ws; const nn = Math.hypot(vx, vy);
+    return (mag < 1e-9 || nn < 1e-12) ? null : [vx / nn, vy / nn, nn / mag];
+  }
+  arrivalDir(t, frac) {
+    // once the front has covered the substrate, keep only cells that arrived by then: the direction is fixed from here on
+    if (this.tCover == null && frac >= this.c.cover) this.tCover = t;
+    const n = this.n, A = this.arrival, T = this.T; let cnt = 0, amax = -Infinity;
+    for (let i = 0; i < n; i++) { const v = A[i]; if (!Number.isNaN(v) && (this.tCover == null || v <= this.tCover)) { cnt++; if (v > amax) amax = v; } }
+    if (cnt < 6) return null;
+    const fill = Math.min(t, amax + Math.max(this.c.hold, 2 * this.dtNom));
+    const arrived = new Uint8Array(n);
+    for (let i = 0; i < n; i++) { const v = A[i]; const ok = !Number.isNaN(v) && (this.tCover == null || v <= this.tCover); arrived[i] = ok ? 1 : 0; T[i] = ok ? v : fill; }
+    const Ts = blur(T, this.gw, this.gh, this.k10, this.tmp, this.bl); sobel(Ts, this.gw, this.gh, this.gx, this.gy);
+    let vx = 0, vy = 0, mag = 0;
+    for (let i = 0; i < n; i++) if (arrived[i]) { vx -= this.gx[i]; vy -= this.gy[i]; mag += Math.hypot(this.gx[i], this.gy[i]); }
+    vx /= cnt; vy /= cnt; mag /= cnt; const nn = Math.hypot(vx, vy);
+    return (mag < 1e-9 || nn < 1e-12) ? null : [vx / nn, vy / nn, nn / mag];
+  }
+}
+
+/* ---------------------------------------------------------------- DOM */
+const $ = id => document.getElementById(id);
+const video = $('video'), overlay = $('overlay'), octx = overlay.getContext('2d'), viewport = $('viewport');
+const banner = $('banner'), pill = $('pill'), pillText = $('pill-text'), progress = $('progress'), progressBar = $('progress-bar');
+const chart = $('chart'), cctx = chart.getContext('2d');
+const css = getComputedStyle(document.documentElement);
+const COL = { gold: css.getPropertyValue('--gold').trim(), live: css.getPropertyValue('--live').trim(), alert: css.getPropertyValue('--alert').trim(),
+  ref: css.getPropertyValue('--ref').trim(), line: css.getPropertyValue('--line').trim(), muted: css.getPropertyValue('--muted').trim(), fg: css.getPropertyValue('--fg').trim() };
+
+const grabCanvas = document.createElement('canvas'); const gctx = grabCanvas.getContext('2d', { willReadFrequently: true });
+const refCanvas = document.createElement('canvas'); refCanvas.width = refCanvas.height = 16; const rctx = refCanvas.getContext('2d', { willReadFrequently: true });
+const heatCanvas = document.createElement('canvas'); const hctx = heatCanvas.getContext('2d');
+
+/* ---------------------------------------------------------------- state */
+let source = 'sample', stream = null, track = null, sampleUrl = null, fileUrl = null, fileName = '';
+let phase = 'idle';              // idle | baseline | live
+let engine = null, gw = 64, gh = 64, gbuf = null;
+let tStart = 0, lastMediaT = -1, firstDet = null, baseEnd = null, vmax = 0, lastOut = null;
+let history = [];                // {t, mean, peak, det}
+let procMs = 0, lockState = '';
+let wakeLock = null;
+
+function gridDims() {
+  const vw = video.videoWidth || 9, vh = video.videoHeight || 16;
+  const w = (roi.x1 - roi.x0) * vw, h = (roi.y1 - roi.y0) * vh;
+  gw = cfg.grid; gh = Math.max(8, Math.min(160, Math.round(gw * h / Math.max(w, 1))));
+  gbuf = new Float32Array(gw * gh);
+}
+function newEngine() { gridDims(); engine = new Engine(gw, gh, cfg); vmax = 0; firstDet = null; baseEnd = null; lastOut = null; history = []; }
+
+/* ---------------------------------------------------------------- frame grab: ROI -> grid by 4x4 block averaging */
+const SS = 4;
+function chanVal(d, p) { const c = cfg.channel; return c === 'r' ? d[p] : c === 'g' ? d[p + 1] : c === 'b' ? d[p + 2] : 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]; }
+function grab() {
+  const vw = video.videoWidth, vh = video.videoHeight; if (!vw || !vh) return null;
+  const W = gw * SS, H = gh * SS;
+  if (grabCanvas.width !== W || grabCanvas.height !== H) { grabCanvas.width = W; grabCanvas.height = H; }
+  gctx.imageSmoothingEnabled = true; gctx.imageSmoothingQuality = 'high';
+  gctx.drawImage(video, roi.x0 * vw, roi.y0 * vh, (roi.x1 - roi.x0) * vw, (roi.y1 - roi.y0) * vh, 0, 0, W, H);
+  const d = gctx.getImageData(0, 0, W, H).data; gbuf.fill(0);
+  for (let y = 0; y < H; y++) { const gy = (y / SS | 0) * gw, row = y * W;
+    for (let x = 0; x < W; x++) gbuf[gy + (x / SS | 0)] += chanVal(d, (row + x) * 4); }
+  const inv = 1 / (SS * SS); for (let i = 0; i < gbuf.length; i++) gbuf[i] *= inv;
+  let rv = 1;
+  if (cfg.useRef) {
+    rctx.imageSmoothingEnabled = true; rctx.imageSmoothingQuality = 'high';
+    rctx.drawImage(video, ref.x0 * vw, ref.y0 * vh, (ref.x1 - ref.x0) * vw, (ref.y1 - ref.y0) * vh, 0, 0, 16, 16);
+    const rd = rctx.getImageData(0, 0, 16, 16).data; let s = 0; for (let p = 0; p < rd.length; p += 4) s += chanVal(rd, p);
+    rv = Math.max(s / 256, 1e-3);
+  }
+  return rv;
+}
+
+/* ---------------------------------------------------------------- per-frame loop */
+function nowT(meta) { return source === 'camera' ? performance.now() / 1000 : (meta && typeof meta.mediaTime === 'number' ? meta.mediaTime : video.currentTime); }
+function processFrame(meta) {
+  if (!video.videoWidth) return;
+  if (drag) { drawOverlay(null); return; }
+  const t = nowT(meta);
+  if (source !== 'camera') {
+    if (lastMediaT >= 0 && t < lastMediaT - 0.05) startVideoBaseline(t);   // looped or rewound
+    lastMediaT = t;
+    if (phase === 'idle') startVideoBaseline(t);
+  }
+  if (phase === 'idle' || !engine) { drawOverlay(); return; }
+  const t0 = performance.now();
+  const rv = grab(); if (rv == null) return;
+  let out = null;
+  if (phase === 'baseline') {
+    engine.addBaseline(gbuf, t, rv);
+    if (t - tStart >= cfg.baselineSec) {
+      if (engine.finishBaseline()) { phase = 'live'; baseEnd = t; }
+      else { showBanner(tr('base_short')); phase = 'idle'; engine = null; }
+    }
+  } else {
+    out = engine.update(gbuf, t, rv); lastOut = out;
+    if (out.detected && firstDet == null) firstDet = t;
+    vmax = Math.max(vmax, out.rmax, engine.noise * cfg.k * 2);
+    history.push({ t, mean: out.mean * 100, peak: out.rmax * 100, det: out.detected });
+    while (history.length && history[0].t < t - 20) history.shift();
+  }
+  procMs = 0.9 * procMs + 0.1 * (performance.now() - t0);
+  drawOverlay(out); updatePanel(t, out); drawChart();
+}
+const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+let lastRafTime = -1, rvfcHandle = 0;
+function loopRVFC(now, meta) { rvfcHandle = video.requestVideoFrameCallback(loopRVFC); try { processFrame(meta); } catch (e) { console.error(e); } }
+function armLoop() { if (!hasRVFC) return; if (rvfcHandle) video.cancelVideoFrameCallback(rvfcHandle); rvfcHandle = video.requestVideoFrameCallback(loopRVFC); }
+function loopRAF() { if (video.readyState >= 2 && video.currentTime !== lastRafTime) { lastRafTime = video.currentTime; try { processFrame(null); } catch (e) { console.error(e); } } requestAnimationFrame(loopRAF); }
+if (!hasRVFC) requestAnimationFrame(loopRAF);
+
+function startVideoBaseline(t) { newEngine(); phase = 'baseline'; tStart = t; lastMediaT = t; }
+function startCameraBaseline() { newEngine(); phase = 'baseline'; tStart = performance.now() / 1000; }
+
+/* ---------------------------------------------------------------- overlay drawing */
+let dispW = 0, dispH = 0, dpr = 1;
+function layoutStage() {
+  const vw = video.videoWidth || 9, vh = video.videoHeight || 16;
+  viewport.style.aspectRatio = vw + ' / ' + vh;
+  const wrapW = viewport.parentElement.clientWidth;
+  const maxH = Math.max(260, window.innerHeight * (window.innerWidth >= 900 ? 0.78 : 0.6));
+  let w = wrapW, h = w * vh / vw; if (h > maxH) { h = maxH; w = h * vw / vh; }
+  viewport.style.width = Math.floor(w) + 'px'; viewport.style.height = Math.floor(h) + 'px'; viewport.style.maxHeight = 'none';
+  dpr = Math.min(window.devicePixelRatio || 1, 2); dispW = Math.floor(w); dispH = Math.floor(h);
+  overlay.width = dispW * dpr; overlay.height = dispH * dpr;
+  const cw = chart.clientWidth; chart.width = cw * dpr; chart.height = 120 * dpr;
+  drawOverlay(lastOut); drawChart();
+}
+function jet(v) { const cl = x => Math.max(0, Math.min(1, x)); return [cl(1.5 - Math.abs(4 * v - 3)) * 255, cl(1.5 - Math.abs(4 * v - 2)) * 255, cl(1.5 - Math.abs(4 * v - 1)) * 255]; }
+function boxPx(b) { return { x: b.x0 * dispW, y: b.y0 * dispH, w: (b.x1 - b.x0) * dispW, h: (b.y1 - b.y0) * dispH }; }
+function drawBox(b, color, label, dashed) {
+  const p = boxPx(b); octx.save(); octx.lineWidth = 2; octx.strokeStyle = color; if (dashed) octx.setLineDash([6, 4]);
+  octx.strokeRect(p.x, p.y, p.w, p.h); octx.setLineDash([]); octx.fillStyle = color;
+  for (const [cx, cy] of [[p.x, p.y], [p.x + p.w, p.y], [p.x, p.y + p.h], [p.x + p.w, p.y + p.h]]) octx.fillRect(cx - 5, cy - 5, 10, 10);
+  octx.font = '600 12px ' + css.getPropertyValue('--font-ui'); const tw = octx.measureText(label).width;
+  octx.fillRect(p.x, p.y - 20 < 0 ? p.y : p.y - 20, tw + 12, 20); octx.fillStyle = '#111';
+  octx.fillText(label, p.x + 6, (p.y - 20 < 0 ? p.y : p.y - 20) + 14); octx.restore();
+}
+function drawArrow(cx, cy, ux, uy, L) {
+  const x1 = cx + ux * L, y1 = cy + uy * L, hl = Math.max(14, L * 0.32), ang = Math.atan2(uy, ux);
+  const path = () => { octx.beginPath(); octx.moveTo(cx, cy); octx.lineTo(x1, y1);
+    octx.moveTo(x1, y1); octx.lineTo(x1 - hl * Math.cos(ang - 0.45), y1 - hl * Math.sin(ang - 0.45));
+    octx.moveTo(x1, y1); octx.lineTo(x1 - hl * Math.cos(ang + 0.45), y1 - hl * Math.sin(ang + 0.45)); };
+  octx.save(); octx.lineCap = 'round'; octx.lineJoin = 'round';
+  path(); octx.strokeStyle = 'rgba(0,0,0,.75)'; octx.lineWidth = 11; octx.stroke();
+  path(); octx.strokeStyle = '#fff'; octx.lineWidth = 5; octx.stroke(); octx.restore();
+}
+function drawOverlay(out) {
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0); octx.clearRect(0, 0, dispW, dispH);
+  const p = boxPx(roi);
+  if (out && engine && engine.ready) {
+    if (heatCanvas.width !== gw || heatCanvas.height !== gh) { heatCanvas.width = gw; heatCanvas.height = gh; }
+    const img = hctx.createImageData(gw, gh), D = img.data;
+    for (let i = 0; i < gw * gh; i++) { if (!engine.mask[i]) continue; const [r, g, b] = jet(Math.min(1, engine.R[i] / vmax));
+      D[i * 4] = r; D[i * 4 + 1] = g; D[i * 4 + 2] = b; D[i * 4 + 3] = 160; }
+    hctx.putImageData(img, 0, 0); octx.imageSmoothingEnabled = true; octx.drawImage(heatCanvas, p.x, p.y, p.w, p.h);
+  }
+  if (cfg.useRef) drawBox(ref, COL.ref, tr('refbox'), true);
+  drawBox(roi, COL.gold, tr('roi'), false);
+  if (out && out.arrow) { const s = cfg.arrowMode === 'flow' ? -1 : 1; drawArrow(p.x + p.w / 2, p.y + p.h / 2, s * out.arrow[0], s * out.arrow[1], 0.3 * Math.min(p.w, p.h)); }
+}
+
+/* ---------------------------------------------------------------- panel */
+const angleOf = v => ((Math.atan2(-v[1], v[0]) * 180 / Math.PI) % 360 + 360) % 360;
+function setPill(ph) { pill.dataset.phase = ph; pillText.textContent = tr({ idle: 'st_idle', baseline: 'st_baseline', live: 'st_live', detect: 'st_detect' }[ph]); }
+function fmtPct(v) { const s = cfg.sign === 'neg' ? '−' : cfg.sign === 'pos' ? '+' : ''; return s + Math.abs(v).toFixed(2) + ' %'; }
+function updatePanel(t, out) {
+  if (phase === 'baseline') { setPill('baseline'); progress.hidden = false; progressBar.style.width = Math.min(100, 100 * (t - tStart) / cfg.baselineSec) + '%';
+    $('time-readout').textContent = (t - tStart).toFixed(1) + ' / ' + cfg.baselineSec.toFixed(1) + ' s'; }
+  else { progress.hidden = true; }
+  if (phase === 'idle') { setPill('idle'); $('time-readout').textContent = ''; }
+  if (phase === 'live' && out) {
+    setPill(out.detected ? 'detect' : 'live');
+    $('time-readout').textContent = (source === 'camera' ? tr('since') + ' ' + (t - baseEnd).toFixed(1) : 't = ' + t.toFixed(2)) + ' s · ' + procMs.toFixed(1) + ' ' + tr('ms');
+    $('r-peak').textContent = fmtPct(out.rmax * 100);
+    $('r-area').textContent = (out.frac * 100).toFixed(0) + ' %';
+    $('r-noise').textContent = (engine.noise * 100).toFixed(3) + ' / ' + (engine.noise * cfg.k * 100).toFixed(2) + ' %';
+    $('r-first').textContent = firstDet == null ? '—' : (source === 'camera' ? (firstDet - baseEnd).toFixed(2) : firstDet.toFixed(2)) + ' s';
+  }
+  if (phase !== 'live') { $('r-peak').textContent = '—'; $('r-area').textContent = '—'; $('r-noise').textContent = '—'; $('r-first').textContent = '—'; }
+  updateDir(out);
+}
+function updateDir(out) {
+  const flow = cfg.arrowMode === 'flow';
+  $('dir-label').textContent = tr(flow ? 'dir_flow' : 'dir_source');
+  const needle = $('needle');
+  if (out && out.arrow) {
+    const a = (angleOf(out.arrow) + (flow ? 180 : 0)) % 360;
+    needle.setAttribute('opacity', '1'); needle.style.transform = 'rotate(' + (-a) + 'deg)';
+    $('dir-big').textContent = tr('dirs')[Math.round(a / 45) % 8] + ' ' + a.toFixed(0) + '°';
+    $('dir-small').textContent = flow ? tr('dir_source') + ' ' + ((a + 180) % 360).toFixed(0) + '°' : tr('dir_flow') + ' ' + ((a + 180) % 360).toFixed(0) + '°';
+  } else {
+    needle.setAttribute('opacity', '0.25'); $('dir-big').textContent = '—';
+    $('dir-small').textContent = phase === 'live' ? tr('dir_wait') : '';
+  }
+}
+function drawChart() {
+  const W = chart.width / dpr, H = 120; if (!W) return;
+  cctx.setTransform(dpr, 0, 0, dpr, 0, 0); cctx.clearRect(0, 0, W, H);
+  const padL = 34, padR = 6, padT = 6, padB = 16, pw = W - padL - padR, ph = H - padT - padB;
+  let ymax = 0.5; for (const h of history) ymax = Math.max(ymax, h.peak, h.mean);
+  ymax = Math.ceil(ymax * 1.15 * 2) / 2;
+  const tNow = history.length ? history[history.length - 1].t : 0, span = 20;
+  const X = t => padL + pw * (1 - (tNow - t) / span), Y = v => padT + ph * (1 - Math.max(-0.2 * ymax, v) / ymax);
+  cctx.font = '10px ' + css.getPropertyValue('--font-data'); cctx.fillStyle = COL.muted; cctx.strokeStyle = COL.line; cctx.lineWidth = 1;
+  const step = ymax <= 2 ? 0.5 : ymax <= 5 ? 1 : 2;
+  for (let v = 0; v <= ymax + 1e-9; v += step) { const y = Math.round(Y(v)) + 0.5; cctx.beginPath(); cctx.moveTo(padL, y); cctx.lineTo(W - padR, y); cctx.stroke(); cctx.fillText(v.toFixed(step < 1 ? 1 : 0), 4, y + 3); }
+  cctx.fillText('−' + span + ' s', padL, H - 3); cctx.textAlign = 'right'; cctx.fillText('0 s', W - padR, H - 3); cctx.textAlign = 'left';
+  if (firstDet != null && firstDet >= tNow - span) { cctx.strokeStyle = COL.alert; cctx.setLineDash([3, 3]); cctx.beginPath(); cctx.moveTo(X(firstDet), padT); cctx.lineTo(X(firstDet), padT + ph); cctx.stroke(); cctx.setLineDash([]); }
+  for (const [key, col, lw] of [['peak', COL.live, 1.5], ['mean', COL.gold, 2]]) {
+    cctx.strokeStyle = col; cctx.lineWidth = lw; cctx.beginPath(); let started = false;
+    for (const h of history) { const x = X(h.t), y = Y(h[key]); if (!started) { cctx.moveTo(x, y); started = true; } else cctx.lineTo(x, y); }
+    cctx.stroke();
+    if (history.length) { const h = history[history.length - 1]; cctx.fillStyle = col; cctx.beginPath(); cctx.arc(X(h.t), Y(h[key]), 3, 0, Math.PI * 2); cctx.fill(); }
+  }
+}
+
+/* ---------------------------------------------------------------- ROI dragging */
+let drag = null;
+function hitTest(px, py) {
+  const boxes = cfg.useRef ? [['ref', ref], ['roi', roi]] : [['roi', roi]];
+  for (const [name, b] of boxes) { const p = boxPx(b);
+    const corners = { nw: [p.x, p.y], ne: [p.x + p.w, p.y], sw: [p.x, p.y + p.h], se: [p.x + p.w, p.y + p.h] };
+    for (const k in corners) if (Math.hypot(px - corners[k][0], py - corners[k][1]) < 22) return { name, mode: k }; }
+  for (const [name, b] of boxes) { const p = boxPx(b); if (px >= p.x && px <= p.x + p.w && py >= p.y && py <= p.y + p.h) return { name, mode: 'move' }; }
+  return null;
+}
+overlay.addEventListener('pointerdown', e => {
+  const r = overlay.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, h = hitTest(px, py);
+  if (!h) return; e.preventDefault(); overlay.setPointerCapture(e.pointerId);
+  const b = h.name === 'roi' ? roi : ref; drag = { ...h, sx: px, sy: py, orig: { ...b } };
+});
+overlay.addEventListener('pointermove', e => {
+  if (!drag) return; const r = overlay.getBoundingClientRect(), dx = (e.clientX - r.left - drag.sx) / dispW, dy = (e.clientY - r.top - drag.sy) / dispH;
+  const o = drag.orig, b = drag.name === 'roi' ? roi : ref, m = 0.05, cl = v => Math.max(0, Math.min(1, v));
+  if (drag.mode === 'move') { const w = o.x1 - o.x0, h = o.y1 - o.y0; const x0 = Math.max(0, Math.min(1 - w, o.x0 + dx)), y0 = Math.max(0, Math.min(1 - h, o.y0 + dy));
+    b.x0 = x0; b.x1 = x0 + w; b.y0 = y0; b.y1 = y0 + h; }
+  else { if (drag.mode.includes('w')) b.x0 = Math.min(cl(o.x0 + dx), b.x1 - m); if (drag.mode.includes('e')) b.x1 = Math.max(cl(o.x1 + dx), b.x0 + m);
+    if (drag.mode.includes('n')) b.y0 = Math.min(cl(o.y0 + dy), b.y1 - m); if (drag.mode.includes('s')) b.y1 = Math.max(cl(o.y1 + dy), b.y0 + m); }
+  phase = 'idle'; engine = null; lastOut = null; drawOverlay(null);
+});
+const endDrag = () => { if (!drag) return; drag = null; regionChanged(); };
+overlay.addEventListener('pointerup', endDrag); overlay.addEventListener('pointercancel', endDrag);
+
+function regionChanged(msg) {
+  if (msg !== false) flashBanner(tr('roi_changed'));
+  restartAnalysis();
+}
+function restartAnalysis() {
+  engine = null; lastOut = null; history = []; firstDet = null;
+  if (source === 'camera') { phase = 'idle'; updatePanel(0, null); drawOverlay(null); drawChart(); setCamIdle(); }
+  else { phase = 'idle'; lastMediaT = -1; try { video.currentTime = 0; } catch (e) {} if (video.paused) video.play().catch(() => {}); }
+}
+
+/* ---------------------------------------------------------------- banner */
+let bannerTimer = null;
+function showBanner(text) { banner.textContent = text; banner.hidden = false; clearTimeout(bannerTimer); }
+function flashBanner(text) { showBanner(text); bannerTimer = setTimeout(() => { banner.hidden = true; }, 2200); }
+function hideBanner() { banner.hidden = true; clearTimeout(bannerTimer); }
+function setCamIdle() { if (source === 'camera' && phase === 'idle') showBanner(tr('idle_cam')); }
+
+/* ---------------------------------------------------------------- sources */
+function setSourceButtons() { for (const s of ['sample', 'camera', 'file']) $('src-' + s).setAttribute('aria-pressed', String(source === s)); }
+function setCaption() { $('caption').textContent = source === 'sample' ? tr('cap_sample') : source === 'camera' ? tr('cap_camera') : source === 'file' ? tr('cap_file') + fileName : ''; }
+function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; track = null; } $('camstat').hidden = true; releaseWake(); }
+function playVideoSource(url, kind) {
+  stopCamera(); hideBanner(); source = kind; setSourceButtons(); setCaption();
+  video.srcObject = null; video.loop = true; video.muted = true; video.src = url; phase = 'idle'; engine = null; lastMediaT = -1; armLoop();
+  $('btn-play').disabled = false; $('btn-baseline').disabled = false;
+  video.play().then(() => { $('btn-play').textContent = tr('btn_pause'); }).catch(() => { showBanner(tr('play_blocked')); $('btn-play').textContent = tr('btn_play'); });
+}
+function loadSample() {
+  if (!sampleUrl) {
+    // H.264 for Safari / Chrome / Edge; VP9 copy for browsers built without H.264
+    const mp4 = video.canPlayType('video/mp4; codecs="avc1.4D401E"'), useMp4 = mp4 === 'probably' || mp4 === 'maybe';
+    const b64 = document.getElementById(useMp4 ? 'sample-mp4' : 'sample-webm').textContent.trim(); const bin = atob(b64); const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); sampleUrl = URL.createObjectURL(new Blob([u8], { type: useMp4 ? 'video/mp4' : 'video/webm' })); }
+  cfg.channel = 'r'; cfg.sign = 'neg'; cfg.baselineSec = 2.8; syncForm();
+  roi = { x0: 0.056, y0: 0.102, x1: 0.833, y1: 0.625 };
+  playVideoSource(sampleUrl, 'sample');
+}
+async function startCamera() {
+  stopCamera(); source = 'camera'; setSourceButtons(); setCaption(); phase = 'idle'; engine = null; lastOut = null; history = [];
+  video.pause(); video.removeAttribute('src'); video.load(); drawOverlay(null); drawChart(); updatePanel(0, null);
+  $('btn-play').disabled = true; showBanner(tr('cam_starting'));
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showBanner(tr('cam_denied')); $('btn-baseline').disabled = true; return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } });
+  } catch (e) { showBanner(tr('cam_denied')); $('btn-baseline').disabled = true; return; }
+  if (source !== 'camera') { stream.getTracks().forEach(t => t.stop()); stream = null; return; }
+  track = stream.getVideoTracks()[0]; video.srcObject = stream; video.loop = false; armLoop();
+  try { await video.play(); } catch (e) {}
+  $('btn-baseline').disabled = false; lockState = ''; updateCamStat(); setCamIdle(); requestWake();
+}
+async function lockCamera() {
+  if (!track || !track.applyConstraints) return 'no';
+  const caps = track.getCapabilities ? track.getCapabilities() : {}, st = track.getSettings ? track.getSettings() : {}, adv = {};
+  if (caps.exposureMode && caps.exposureMode.includes('manual')) { adv.exposureMode = 'manual'; if (st.exposureTime) adv.exposureTime = st.exposureTime; }
+  if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes('manual')) { adv.whiteBalanceMode = 'manual'; if (st.colorTemperature) adv.colorTemperature = st.colorTemperature; }
+  if (caps.focusMode && caps.focusMode.includes('manual')) { adv.focusMode = 'manual'; if (st.focusDistance) adv.focusDistance = st.focusDistance; }
+  if (!Object.keys(adv).length) return 'no';
+  try { await track.applyConstraints({ advanced: [adv] }); return adv.exposureMode && adv.whiteBalanceMode ? 'ok' : 'partial'; } catch (e) { return 'no'; }
+}
+function updateCamStat() {
+  const el = $('camstat'); if (source !== 'camera' || !track) { el.hidden = true; return; }
+  const st = track.getSettings ? track.getSettings() : {};
+  el.innerHTML = (st.width ? st.width + '×' + st.height + (st.frameRate ? ' @ ' + Math.round(st.frameRate) + ' fps' : '') + ' · ' : '') + (lockState ? tr('lock_' + lockState) : '');
+  el.hidden = false;
+}
+async function requestWake() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+function releaseWake() { try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null; }
+
+/* ---------------------------------------------------------------- controls */
+$('src-sample').addEventListener('click', loadSample);
+$('src-camera').addEventListener('click', startCamera);
+$('src-file').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  if (fileUrl) URL.revokeObjectURL(fileUrl); fileUrl = URL.createObjectURL(f); fileName = f.name; playVideoSource(fileUrl, 'file'); e.target.value = '';
+});
+video.addEventListener('error', () => { if (source !== 'camera') showBanner(tr('file_err')); });
+video.addEventListener('loadedmetadata', () => { layoutStage(); });
+window.addEventListener('resize', layoutStage);
+$('btn-baseline').addEventListener('click', async () => {
+  hideBanner();
+  if (source === 'camera') { if (!track) return; lockState = await lockCamera(); updateCamStat(); startCameraBaseline(); }
+  else restartAnalysis();
+});
+$('btn-reset').addEventListener('click', () => { hideBanner(); restartAnalysis(); });
+$('btn-play').addEventListener('click', () => {
+  if (source === 'camera') return;
+  if (video.paused) { hideBanner(); video.play().then(() => { $('btn-play').textContent = tr('btn_pause'); }).catch(() => {}); }
+  else { video.pause(); $('btn-play').textContent = tr('btn_play'); }
+});
+function syncForm() {
+  $('set-channel').value = cfg.channel; $('set-sign').value = cfg.sign; $('set-arrow').value = cfg.arrowMode;
+  $('set-base').value = cfg.baselineSec; $('set-k').value = cfg.k; $('set-tau').value = cfg.tau; $('set-ref').checked = cfg.useRef;
+}
+function onSetting() {
+  const num = (id, lo, hi, d) => { const v = parseFloat($(id).value); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+  const before = JSON.stringify([cfg.channel, cfg.sign, cfg.baselineSec, cfg.k, cfg.tau, cfg.useRef]);
+  cfg.channel = $('set-channel').value; cfg.sign = $('set-sign').value; cfg.arrowMode = $('set-arrow').value;
+  cfg.baselineSec = num('set-base', 1, 20, 2.8); cfg.k = num('set-k', 2, 12, 4); cfg.tau = num('set-tau', 0, 3, 0.1); cfg.useRef = $('set-ref').checked;
+  if (JSON.stringify([cfg.channel, cfg.sign, cfg.baselineSec, cfg.k, cfg.tau, cfg.useRef]) !== before) regionChanged(false);
+  else { drawOverlay(lastOut); updateDir(lastOut); }
+}
+for (const id of ['set-channel', 'set-sign', 'set-arrow', 'set-base', 'set-k', 'set-tau', 'set-ref']) $(id).addEventListener('change', onSetting);
+
+function applyLang() {
+  document.documentElement.lang = lang === 'ja' ? 'ja' : 'zh-CN';
+  document.querySelectorAll('[data-i18n]').forEach(el => { const v = tr(el.dataset.i18n); if (typeof v === 'string') el.textContent = v; });
+  $('lang-zh').setAttribute('aria-pressed', String(lang === 'zh')); $('lang-ja').setAttribute('aria-pressed', String(lang === 'ja'));
+  $('btn-play').textContent = tr(video.paused && source !== 'camera' ? 'btn_play' : 'btn_pause');
+  setCaption(); updateCamStat(); drawOverlay(lastOut);
+  if (phase !== 'live') setPill(phase); updateDir(lastOut);
+}
+for (const l of ['zh', 'ja']) $('lang-' + l).addEventListener('click', () => { lang = l; try { localStorage.setItem('gasflow.lang', l); } catch (e) {} applyLang(); });
+
+// test hook (read-only)
+window.gasflowDebug = { get state() { return { source, phase, firstDet, baseEnd, noise: engine && engine.noise, grid: [gw, gh],
+  arrowFlowDeg: lastOut && lastOut.arrow ? (angleOf(lastOut.arrow) + 180) % 360 : null, frac: lastOut && lastOut.frac, procMs }; } };
+
+const hasSample = document.getElementById('sample-mp4').textContent.trim().length > 100;
+$('src-sample').hidden = !hasSample;
+applyLang(); syncForm(); layoutStage();
+if (hasSample) loadSample();
+else { source = 'none'; setSourceButtons(); setCaption(); $('btn-play').disabled = true; $('btn-baseline').disabled = true; showBanner(tr('pick_source')); drawOverlay(null); }
+})();
+</script>
+</body>
+</html>
