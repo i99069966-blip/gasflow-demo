@@ -1,0 +1,5 @@
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:2:1: warning: add '@preconcurrency' to suppress 'Sendable'-related warnings from module 'AVFoundation'
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:60:21: warning: capture of 'self' with non-Sendable type 'VideoFileSource' in a '@Sendable' closure
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:60:56: warning: capture of 'track' with non-Sendable type 'AVAssetTrack' in a '@Sendable' closure
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:65:44: warning: capture of 'self' with non-Sendable type 'VideoFileSource' in a '@Sendable' closure
+2026-11-01 07:08:19.916 appintentsmetadataprocessor[2343:10383] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
