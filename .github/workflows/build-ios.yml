@@ -11,6 +11,8 @@ on:
 jobs:
   build:
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +36,22 @@ jobs:
           mkdir -p Payload
           cp -R build/Release-iphoneos/GasCam.app Payload/
           zip -qry GasCam-unsigned.ipa Payload
+
+      - name: Publish build to the gascam-build branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir out
+          cp GasCam-unsigned.ipa build-device.log out/
+          { xcodebuild -version; echo "source ${GITHUB_SHA}"; date -u; } > out/build-info.txt
+          grep -E "warning:" build-device.log | sort -u > out/warnings.txt || true
+          cd out
+          git init -q -b gascam-build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -qm "GasCam build ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gascam-build
 
       - uses: actions/upload-artifact@v4
         with:
