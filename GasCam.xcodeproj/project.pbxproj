@@ -1,0 +1,424 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		7F072DD4FFE153F2CFBBCE0F /* Colormap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE652E981A46F2F29C12B4D /* Colormap.swift */; };
+		B2A53536D8705ED1706205BE /* FrameDownsampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DFF4B63DD6588FE031C961D /* FrameDownsampler.swift */; };
+		909B900AFC350DDCA927DE0A /* GasAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8241F7B09CAB6702A2555497 /* GasAnalyzer.swift */; };
+		5785001924CE6F9F2D63DD55 /* GasModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3E2F1450D8145CFAEF8235 /* GasModels.swift */; };
+		5567AD08CA019E4EBC8E2236 /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62D26DC40051CAF58627FD9D /* CameraController.swift */; };
+		7A106B3507F5DE0FA3DCDA4B /* CameraSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD196AC409C640F44479847 /* CameraSettings.swift */; };
+		400895057A7FAFCA01674937 /* VideoRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC9D2240D7D485E772B9A38 /* VideoRecorder.swift */; };
+		3C8B40F6BD1245264670A64D /* FramePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B78324BC45E88E6CEC6A2B /* FramePipeline.swift */; };
+		10DF852216FF3391C2CD3347 /* VideoFileSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C35D03E154032095FB286D /* VideoFileSource.swift */; };
+		3CFB95721376FD09DDCF3F0D /* MetalPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B51C3F4E1AECDDE0C9094DC /* MetalPreviewView.swift */; };
+		2B8D722BA3DE8FEA9D742C7C /* PreviewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835D0C4C7C5E2B3A1F39E09C /* PreviewRenderer.swift */; };
+		A290BDBDD07B7C40C22A9434 /* Bars.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88189A9FEA84A6400C0302E9 /* Bars.swift */; };
+		091D0686EBE6823F484BFAC7 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF752E97FA5573A8F648B8C /* Components.swift */; };
+		2E958D70619E0EC1FAAA3083 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1627B0F655F3D44658867B0E /* ContentView.swift */; };
+		0D782B8FCBBEAF368C0EA640 /* ControlPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */; };
+		5DE3108726ADEDE6677B92BE /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB45C5FEE899B997B0EF65C /* HistogramView.swift */; };
+		F2A4F6DBCCE8DEF9268C5E84 /* PreviewArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */; };
+		F98F236486D43872D4B7360D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E3CF39D7795486E18D43C3 /* SettingsView.swift */; };
+		21D9DD3CFE734C8CCF68D63C /* TopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 359AFBA3C7547820E027888F /* TopBar.swift */; };
+		358C46EB318B0AAD4F668993 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7B60FA8C97F93E0936CE91CE /* Assets.xcassets */; };
+		6D98FD82395FC2BB2C849D55 /* GasCamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9771A28B0B89ED6E78451BBE /* GasCamApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		F5BF48AA40CAD7891EB709FC /* GasCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GasCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0B51C3F4E1AECDDE0C9094DC /* MetalPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalPreviewView.swift; sourceTree = "<group>"; };
+		0DC9D2240D7D485E772B9A38 /* VideoRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRecorder.swift; sourceTree = "<group>"; };
+		1627B0F655F3D44658867B0E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		2D1B4A7191B74A6ED7C450F9 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		359AFBA3C7547820E027888F /* TopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopBar.swift; sourceTree = "<group>"; };
+		4EE652E981A46F2F29C12B4D /* Colormap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colormap.swift; sourceTree = "<group>"; };
+		4FF752E97FA5573A8F648B8C /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		62D26DC40051CAF58627FD9D /* CameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraController.swift; sourceTree = "<group>"; };
+		7B60FA8C97F93E0936CE91CE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		8241F7B09CAB6702A2555497 /* GasAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasAnalyzer.swift; sourceTree = "<group>"; };
+		835D0C4C7C5E2B3A1F39E09C /* PreviewRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewRenderer.swift; sourceTree = "<group>"; };
+		87C35D03E154032095FB286D /* VideoFileSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFileSource.swift; sourceTree = "<group>"; };
+		88189A9FEA84A6400C0302E9 /* Bars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bars.swift; sourceTree = "<group>"; };
+		9771A28B0B89ED6E78451BBE /* GasCamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasCamApp.swift; sourceTree = "<group>"; };
+		97E3CF39D7795486E18D43C3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		9B3E2F1450D8145CFAEF8235 /* GasModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasModels.swift; sourceTree = "<group>"; };
+		9DFF4B63DD6588FE031C961D /* FrameDownsampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameDownsampler.swift; sourceTree = "<group>"; };
+		A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArea.swift; sourceTree = "<group>"; };
+		BDB45C5FEE899B997B0EF65C /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
+		DBD196AC409C640F44479847 /* CameraSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSettings.swift; sourceTree = "<group>"; };
+		DE83B17165685B997360D815 /* GasCam-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GasCam-Info.plist"; sourceTree = "<group>"; };
+		F0B78324BC45E88E6CEC6A2B /* FramePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramePipeline.swift; sourceTree = "<group>"; };
+		FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlPanel.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		9EA1AC50D4B0055C110846DE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		FAD58DE7366495DB4650CFEF = {
+			isa = PBXGroup;
+			children = (
+				2D1B4A7191B74A6ED7C450F9 /* README.md */,
+				DE83B17165685B997360D815 /* GasCam-Info.plist */,
+				FD73C1AD01F5FCA0C26436CD /* GasCam */,
+				86024CAD1E83101D97359D73 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		86024CAD1E83101D97359D73 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F5BF48AA40CAD7891EB709FC /* GasCam.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		0CCC2DE9244B69A951CBC6EE /* Playback */ = {
+			isa = PBXGroup;
+			children = (
+				87C35D03E154032095FB286D /* VideoFileSource.swift */,
+			);
+			path = Playback;
+			sourceTree = "<group>";
+		};
+		1214AF78C28F29A64F7F3099 /* Camera */ = {
+			isa = PBXGroup;
+			children = (
+				62D26DC40051CAF58627FD9D /* CameraController.swift */,
+				DBD196AC409C640F44479847 /* CameraSettings.swift */,
+				0DC9D2240D7D485E772B9A38 /* VideoRecorder.swift */,
+			);
+			path = Camera;
+			sourceTree = "<group>";
+		};
+		2C25B656F0419F9DB4765C99 /* Pipeline */ = {
+			isa = PBXGroup;
+			children = (
+				F0B78324BC45E88E6CEC6A2B /* FramePipeline.swift */,
+			);
+			path = Pipeline;
+			sourceTree = "<group>";
+		};
+		617A0525487C0F0642726EBD /* Rendering */ = {
+			isa = PBXGroup;
+			children = (
+				0B51C3F4E1AECDDE0C9094DC /* MetalPreviewView.swift */,
+				835D0C4C7C5E2B3A1F39E09C /* PreviewRenderer.swift */,
+			);
+			path = Rendering;
+			sourceTree = "<group>";
+		};
+		6E00B4CFC291541ACDA57DB7 /* Analysis */ = {
+			isa = PBXGroup;
+			children = (
+				4EE652E981A46F2F29C12B4D /* Colormap.swift */,
+				9DFF4B63DD6588FE031C961D /* FrameDownsampler.swift */,
+				8241F7B09CAB6702A2555497 /* GasAnalyzer.swift */,
+				9B3E2F1450D8145CFAEF8235 /* GasModels.swift */,
+			);
+			path = Analysis;
+			sourceTree = "<group>";
+		};
+		A6F818FF8CF305AB1D871DB7 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				88189A9FEA84A6400C0302E9 /* Bars.swift */,
+				4FF752E97FA5573A8F648B8C /* Components.swift */,
+				1627B0F655F3D44658867B0E /* ContentView.swift */,
+				FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */,
+				BDB45C5FEE899B997B0EF65C /* HistogramView.swift */,
+				A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */,
+				97E3CF39D7795486E18D43C3 /* SettingsView.swift */,
+				359AFBA3C7547820E027888F /* TopBar.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		FD73C1AD01F5FCA0C26436CD /* GasCam */ = {
+			isa = PBXGroup;
+			children = (
+				6E00B4CFC291541ACDA57DB7 /* Analysis */,
+				1214AF78C28F29A64F7F3099 /* Camera */,
+				2C25B656F0419F9DB4765C99 /* Pipeline */,
+				0CCC2DE9244B69A951CBC6EE /* Playback */,
+				617A0525487C0F0642726EBD /* Rendering */,
+				A6F818FF8CF305AB1D871DB7 /* UI */,
+				7B60FA8C97F93E0936CE91CE /* Assets.xcassets */,
+				9771A28B0B89ED6E78451BBE /* GasCamApp.swift */,
+			);
+			path = GasCam;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		42AEFBAE01D2DFD981F7DA7D /* GasCam */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 449CDAD090025738145986EB /* Build configuration list for PBXNativeTarget "GasCam" */;
+			buildPhases = (
+				D3C95E37FB51BEEBFB3E63BF /* Sources */,
+				9EA1AC50D4B0055C110846DE /* Frameworks */,
+				34274CC4D8480DF68A75E3AA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GasCam;
+			productName = GasCam;
+			productReference = F5BF48AA40CAD7891EB709FC /* GasCam.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1520;
+				LastUpgradeCheck = 1520;
+				TargetAttributes = {
+					42AEFBAE01D2DFD981F7DA7D = {
+						CreatedOnToolsVersion = 15.2;
+					};
+				};
+			};
+			buildConfigurationList = CE36D6306C17890370B358E3 /* Build configuration list for PBXProject "GasCam" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = FAD58DE7366495DB4650CFEF;
+			productRefGroup = 86024CAD1E83101D97359D73 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				42AEFBAE01D2DFD981F7DA7D /* GasCam */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		34274CC4D8480DF68A75E3AA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				358C46EB318B0AAD4F668993 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D3C95E37FB51BEEBFB3E63BF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7F072DD4FFE153F2CFBBCE0F /* Colormap.swift in Sources */,
+				B2A53536D8705ED1706205BE /* FrameDownsampler.swift in Sources */,
+				909B900AFC350DDCA927DE0A /* GasAnalyzer.swift in Sources */,
+				5785001924CE6F9F2D63DD55 /* GasModels.swift in Sources */,
+				5567AD08CA019E4EBC8E2236 /* CameraController.swift in Sources */,
+				7A106B3507F5DE0FA3DCDA4B /* CameraSettings.swift in Sources */,
+				400895057A7FAFCA01674937 /* VideoRecorder.swift in Sources */,
+				3C8B40F6BD1245264670A64D /* FramePipeline.swift in Sources */,
+				10DF852216FF3391C2CD3347 /* VideoFileSource.swift in Sources */,
+				3CFB95721376FD09DDCF3F0D /* MetalPreviewView.swift in Sources */,
+				2B8D722BA3DE8FEA9D742C7C /* PreviewRenderer.swift in Sources */,
+				A290BDBDD07B7C40C22A9434 /* Bars.swift in Sources */,
+				091D0686EBE6823F484BFAC7 /* Components.swift in Sources */,
+				2E958D70619E0EC1FAAA3083 /* ContentView.swift in Sources */,
+				0D782B8FCBBEAF368C0EA640 /* ControlPanel.swift in Sources */,
+				5DE3108726ADEDE6677B92BE /* HistogramView.swift in Sources */,
+				F2A4F6DBCCE8DEF9268C5E84 /* PreviewArea.swift in Sources */,
+				F98F236486D43872D4B7360D /* SettingsView.swift in Sources */,
+				21D9DD3CFE734C8CCF68D63C /* TopBar.swift in Sources */,
+				6D98FD82395FC2BB2C849D55 /* GasCamApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2FF62DEBCCFC95BC5233C381 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A7B0E3C213F89FA7C7AEB006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		685BB64ED0A39CDFE9D8EA39 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "GasCam-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = GasCam;
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄 LSPR 基板并实时检测气体的扩散与来源方向。";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "把录像和分析结果图保存到相册。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "jp.lab.lspr.GasCam";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		1D9DEBDC9F11675DBB5F3508 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "GasCam-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = GasCam;
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄 LSPR 基板并实时检测气体的扩散与来源方向。";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "把录像和分析结果图保存到相册。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "jp.lab.lspr.GasCam";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CE36D6306C17890370B358E3 /* Build configuration list for PBXProject "GasCam" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2FF62DEBCCFC95BC5233C381 /* Debug */,
+				A7B0E3C213F89FA7C7AEB006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		449CDAD090025738145986EB /* Build configuration list for PBXNativeTarget "GasCam" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				685BB64ED0A39CDFE9D8EA39 /* Debug */,
+				1D9DEBDC9F11675DBB5F3508 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
+}
