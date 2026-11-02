@@ -4,7 +4,7 @@ import CoreGraphics
 
 /// Plays a recorded video through the same analysis pipeline as the live camera
 /// (frames are rotated upright and delivered as BGRA at real-time pace × speed).
-/// Use it to test on recorded experiments – and in the iOS Simulator, which has no camera.
+/// Supports seeking and single-frame stepping. Works in the iOS Simulator (no camera needed).
 final class VideoFileSource {
     /// Frame callback on the playback queue.
     var frameHandler: ((CVPixelBuffer, CMTime) -> Void)?
@@ -13,11 +13,21 @@ final class VideoFileSource {
     /// Main thread. nil = finished normally, otherwise an error message.
     var onFinish: ((String?) -> Void)?
 
+    private struct Loaded {
+        let asset: AVAsset
+        let track: AVAssetTrack
+        let size: CGSize
+        let transform: CGAffineTransform
+        let fps: Float
+        let duration: CMTime
+    }
+
     private let queue = DispatchQueue(label: "gascam.file.playback", qos: .userInitiated)
     private let lock = NSLock()
     private var generation = 0
     private var pausedFlag = false
     private var speedValue: Double = 1
+    private var loaded: Loaded?
 
     var paused: Bool {
         get { lock.lock(); defer { lock.unlock() }; return pausedFlag }
@@ -28,6 +38,13 @@ final class VideoFileSource {
     var speed: Double {
         get { lock.lock(); defer { lock.unlock() }; return speedValue }
         set { lock.lock(); speedValue = newValue; lock.unlock() }
+    }
+
+    /// Nominal frame rate of the loaded file (30 until a file is loaded).
+    var frameRate: Double {
+        lock.lock(); defer { lock.unlock() }
+        if let l = loaded, l.fps > 1 { return Double(l.fps) }
+        return 30
     }
 
     private func bumpGeneration() -> Int {
@@ -47,6 +64,7 @@ final class VideoFileSource {
     func start(url: URL) {
         let gen = bumpGeneration()
         paused = false
+        lock.lock(); loaded = nil; lock.unlock()
         Task {
             do {
                 let asset = AVURLAsset(url: url)
@@ -56,10 +74,9 @@ final class VideoFileSource {
                 }
                 let (size, transform, fps) = try await track.load(.naturalSize, .preferredTransform, .nominalFrameRate)
                 let duration = try await asset.load(.duration)
-                self.queue.async {
-                    self.readLoop(asset: asset, track: track, size: size, transform: transform,
-                                  fps: fps, duration: duration, generation: gen)
-                }
+                let l = Loaded(asset: asset, track: track, size: size, transform: transform, fps: fps, duration: duration)
+                self.lock.lock(); self.loaded = l; self.lock.unlock()
+                self.queue.async { self.readLoop(l, from: 0, generation: gen) }
             } catch {
                 let msg = error.localizedDescription
                 DispatchQueue.main.async { self.onFinish?(msg) }
@@ -67,37 +84,55 @@ final class VideoFileSource {
         }
     }
 
+    /// Jump to `seconds`. When paused, exactly one frame (the one at the new position) is delivered.
+    func seek(to seconds: Double) {
+        lock.lock()
+        let l = loaded
+        generation += 1
+        let gen = generation
+        lock.unlock()
+        guard let l else { return }
+        queue.async { self.readLoop(l, from: seconds, generation: gen) }
+    }
+
     func stop() {
         _ = bumpGeneration()
     }
 
-    private func readLoop(asset: AVAsset, track: AVAssetTrack, size: CGSize, transform: CGAffineTransform,
-                          fps: Float, duration: CMTime, generation gen: Int) {
+    private func readLoop(_ l: Loaded, from startSeconds: Double, generation gen: Int) {
+        guard isCurrent(gen) else { return }
         // Video composition that applies the track's rotation (portrait iPhone videos).
-        let rect = CGRect(origin: .zero, size: size).applying(transform)
+        let rect = CGRect(origin: .zero, size: l.size).applying(l.transform)
         let renderSize = CGSize(width: abs(rect.width).rounded(), height: abs(rect.height).rounded())
         let comp = AVMutableVideoComposition()
         comp.renderSize = renderSize
-        let rate = fps > 1 ? fps : 30
+        let rate = l.fps > 1 ? l.fps : 30
         comp.frameDuration = CMTime(value: 1, timescale: CMTimeScale(rate.rounded()))
         let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRange(start: .zero, duration: duration)
-        let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
-        let fixed = transform.concatenating(CGAffineTransform(translationX: -rect.origin.x, y: -rect.origin.y))
+        instruction.timeRange = CMTimeRange(start: .zero, duration: l.duration)
+        let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: l.track)
+        let fixed = l.transform.concatenating(CGAffineTransform(translationX: -rect.origin.x, y: -rect.origin.y))
         layer.setTransform(fixed, at: .zero)
         instruction.layerInstructions = [layer]
         comp.instructions = [instruction]
 
         let reader: AVAssetReader
         do {
-            reader = try AVAssetReader(asset: asset)
+            reader = try AVAssetReader(asset: l.asset)
         } catch {
             let msg = error.localizedDescription
             DispatchQueue.main.async { self.onFinish?(msg) }
             return
         }
+        let total = l.duration.seconds
+        let lastFrame = max(0, total - 1 / Double(rate))
+        let start = min(max(0, startSeconds), lastFrame)
+        if start > 0 {
+            let s = CMTime(seconds: start, preferredTimescale: 600)
+            reader.timeRange = CMTimeRange(start: s, end: l.duration)
+        }
         let output = AVAssetReaderVideoCompositionOutput(
-            videoTracks: [track],
+            videoTracks: [l.track],
             videoSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
         output.videoComposition = comp
         output.alwaysCopiesSampleData = false
@@ -112,18 +147,19 @@ final class VideoFileSource {
             return
         }
 
-        let total = duration.seconds
         var anchorPTS: Double?
         var anchorWall = 0.0
         var anchorSpeed = -1.0
-        var lastPTS = 0.0
+        var lastPTS = -1.0
         var lastProgress = 0.0
+        var delivered = 0
         let clock = { ProcessInfo.processInfo.systemUptime }
 
         while isCurrent(gen) {
-            if paused {
-                Thread.sleep(forTimeInterval: 0.05)
-                anchorPTS = nil      // re-anchor after resuming
+            // While paused, keep showing the frame at the current position (the first one is always delivered).
+            if paused && delivered > 0 {
+                Thread.sleep(forTimeInterval: 0.03)
+                anchorPTS = nil
                 continue
             }
             guard let sb = output.copyNextSampleBuffer() else { break }
@@ -132,18 +168,20 @@ final class VideoFileSource {
             let ts = pts.seconds
             let sp = speed
             if anchorPTS == nil || sp != anchorSpeed {
-                anchorPTS = lastPTS > 0 ? lastPTS : ts
+                anchorPTS = lastPTS >= 0 ? lastPTS : ts
                 anchorWall = clock()
                 anchorSpeed = sp
             }
-            if sp > 0, let a = anchorPTS {
+            if sp > 0, let a = anchorPTS, delivered > 0 {
                 let wait = anchorWall + (ts - a) / sp - clock()
                 if wait > 0 { Thread.sleep(forTimeInterval: min(wait, 1)) }
             }
+            guard isCurrent(gen) else { break }
             frameHandler?(pb, pts)
+            delivered += 1
             lastPTS = ts
             let now = clock()
-            if now - lastProgress > 0.1 {
+            if delivered == 1 || now - lastProgress > 0.1 {
                 lastProgress = now
                 DispatchQueue.main.async { self.onProgress?(ts, total) }
             }

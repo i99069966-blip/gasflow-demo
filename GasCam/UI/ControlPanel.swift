@@ -57,7 +57,12 @@ struct ControlPanel: View {
                 Text(String(format: "%@  ·  %.0f°", camera.shutter.shutterLabel, camera.shutterAngle))
                     .font(Theme.mono(13, .semibold))
                 Spacer()
-                Text("50/60Hz 灯光防闪: 1/50·1/100 或 1/60·1/120").font(Theme.mono(9)).foregroundStyle(.gray)
+            }
+            HStack(spacing: 6) {
+                Text("防频闪").font(Theme.mono(10, .semibold)).foregroundStyle(.gray)
+                PillButton(text: "60Hz 九州/关西") { applyFlickerFree(60) }
+                PillButton(text: "50Hz 关东") { applyFlickerFree(50) }
+                Spacer()
             }
             chipsRow(shutterChoices.map { $0.shutterLabel }, selected: camera.exposureAuto ? "" : camera.shutter.shutterLabel) { label in
                 if let v = shutterChoices.first(where: { $0.shutterLabel == label }) { camera.setShutter(v) }
@@ -131,15 +136,43 @@ struct ControlPanel: View {
 
     // MARK: Lens
 
+    private func applyFlickerFree(_ hz: Double) {
+        if let s = camera.flickerFreeShutter(mainsHz: hz) {
+            camera.setShutter(s)
+        } else {
+            camera.statusMessage = "\(Int(camera.frameRate)) fps 时快门无法避开 \(Int(hz))Hz 灯光频闪，请把帧率降到 \(Int(2 * hz)) fps 以下，或改用直流/LED 恒流光源。"
+        }
+    }
+
+    private var zoomPresets: [CGFloat] {
+        [1, 1.5, 2, 3, 4, 5].filter { $0 <= camera.maxZoom + 0.001 }
+    }
+
     private var lensPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            caption("镜头")
+            caption("镜头（本机的物理镜头）")
             chipsRow(camera.lenses.map { $0.label },
                      selected: camera.lenses.first(where: { $0.id == camera.currentLensID })?.label ?? "",
                      disabled: pipeline.isRecording) { label in
                 if let l = camera.lenses.first(where: { $0.label == label }) { camera.selectLens(l.id) }
             }
-            Text("切换镜头后会自动重新取基线。").font(Theme.mono(10)).foregroundStyle(.gray)
+            HStack {
+                caption("变焦（数码）")
+                Spacer()
+                Text(String(format: "等效 %.2fx", camera.effectiveZoom)).font(Theme.mono(12, .semibold))
+            }
+            chipsRow(zoomPresets.map { String(format: "×%.1f", $0) },
+                     selected: String(format: "×%.1f", camera.zoomFactor), disabled: pipeline.isRecording) { s in
+                if let v = Double(s.dropFirst()) { camera.setZoom(CGFloat(v)) }
+            }
+            if camera.maxZoom > 1 {
+                ValueSlider(label: "变焦",
+                            value: Binding(get: { Double(camera.zoomFactor) }, set: { camera.setZoom(CGFloat($0)) }),
+                            range: 1...Double(camera.maxZoom)) { String(format: "×%.2f", $0) }
+                    .disabled(pipeline.isRecording)
+            }
+            Text("数码变焦是裁切放大，画质会下降；0.5x 镜头放大 ×2 ≈ 1x 视角。切换镜头或变焦后会自动重新取基线。")
+                .font(Theme.mono(10)).foregroundStyle(.gray)
         }
     }
 

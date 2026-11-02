@@ -17,14 +17,24 @@ final class VideoRecorder {
     private var adaptor: AVAssetWriterInputPixelBufferAdaptor?
     private var sessionStarted = false
     private(set) var startTime: CMTime?
+    private(set) var lastTime: CMTime?
     private(set) var framesWritten = 0
     private(set) var framesDropped = 0
     private(set) var lastError: String?
 
     var isRecording: Bool { config != nil }
 
+    /// Seconds between the first and last written frame (+ one frame).
+    var recordedDuration: Double {
+        guard let s = startTime, let e = lastTime, let cfg = config ?? lastConfig else { return 0 }
+        return max(0, (e - s).seconds) + 1 / max(1, cfg.fps)
+    }
+    private var lastConfig: Config?
+
     func begin(_ cfg: Config) {
         config = cfg
+        lastConfig = cfg
+        lastTime = nil
         writer = nil
         input = nil
         adaptor = nil
@@ -49,6 +59,7 @@ final class VideoRecorder {
         if inp.isReadyForMoreMediaData {
             if ad.append(pixelBuffer, withPresentationTime: time) {
                 framesWritten += 1
+                lastTime = time
             } else {
                 lastError = w.error?.localizedDescription
             }
@@ -127,7 +138,7 @@ final class AnalysisLogger {
     private var buffer = ""
     private var rows = 0
 
-    static let header = "t_s,phase,mean_resp_pct,max_resp_pct,active_frac,hotspot_x,hotspot_y,arrived_px,src_mode,src_angle_deg,src_conf,entry_x,entry_y,src_x,src_y\n"
+    static let header = "t_s,phase,roi_mean_R,roi_mean_G,roi_mean_B,mean_resp_pct,max_resp_pct,active_frac,hotspot_x,hotspot_y,arrived_px,src_mode,src_angle_deg,src_conf,entry_x,entry_y,src_x,src_y\n"
 
     init?(url: URL, comment: String) {
         self.url = url
@@ -147,6 +158,7 @@ final class AnalysisLogger {
         }
         var fields: [String] = [
             String(format: "%.4f", t), phase,
+            String(format: "%.2f", r.roiMeanR), String(format: "%.2f", r.roiMeanG), String(format: "%.2f", r.roiMeanB),
             String(format: "%.3f", r.meanResponse), String(format: "%.3f", r.maxResponse),
             String(format: "%.4f", r.activeFraction),
             r.hotspot.map { String(format: "%.4f", $0.x) } ?? "",

@@ -20,6 +20,8 @@ final class FramePipeline: ObservableObject {
     @Published private(set) var histogram = Histogram()
     @Published private(set) var frameAspect: CGFloat = 9.0 / 16.0
     @Published private(set) var measuredFPS: Double = 0
+    /// Live curve samples (ROI mean R/G/B and response), published ~15 Hz.
+    @Published private(set) var chart: [ChartSample] = []
     @Published private(set) var isRecording = false
     @Published private(set) var recordingStart: Date?
     @Published private(set) var playbackTime: Double = 0
@@ -87,6 +89,10 @@ final class FramePipeline: ObservableObject {
     private var frameH = 0
     private var logger: AnalysisLogger?
     private var recordingT0: Double?
+    private var chartBuf: [ChartSample] = []
+    private var chartT0: Double?
+    private var lastChartT: Double = -1
+    private var pendingSeekReset = false
 
     init(camera: CameraController) {
         self.camera = camera
@@ -228,10 +234,16 @@ final class FramePipeline: ObservableObject {
         let toPhotos = recordSettings.saveToPhotos
         camera.videoQueue.async {
             let dropped = self.recorder.framesDropped
+            let written = self.recorder.framesWritten
+            let duration = self.recorder.recordedDuration
             self.recorder.finish { url, err in
                 DispatchQueue.main.async {
                     if let url {
-                        self.toast = "已保存 \(url.lastPathComponent)" + (dropped > 0 ? "（丢帧 \(dropped)）" : "")
+                        let bytes = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.doubleValue ?? 0
+                        let mbps = duration > 0 ? bytes * 8 / duration / 1_000_000 : 0
+                        let fps = duration > 0 ? Double(written) / duration : 0
+                        self.toast = "已保存 \(url.lastPathComponent)\n"
+                            + String(format: "实际码率 %.1f Mb/s · 实际帧率 %.1f fps · 丢帧 %d", mbps, fps, dropped)
                         if toPhotos { self.saveVideoToPhotos(url) }
                     } else {
                         self.toast = "录制失败: \(err ?? "未知错误")"
@@ -275,8 +287,12 @@ final class FramePipeline: ObservableObject {
         pendingRebaseline = true
         lastAnalysisT = -1
         lastPublishT = -1
+        chartBuf.removeAll()
+        chartT0 = nil
+        lastChartT = -1
         procLock.unlock()
         renderer?.clear()
+        chart = []
         currentFileURL = url
         source = .file(name: url.lastPathComponent)
         playbackFinished = false
@@ -291,6 +307,29 @@ final class FramePipeline: ObservableObject {
         if let url = currentFileURL { openVideo(url: url) }
     }
 
+    /// Jump to a position in the video. The baseline is kept (same scene, same exposure);
+    /// the arrival map, EMA and curve restart from the new position. Press BASELINE to
+    /// take a new reference image from here.
+    func seekVideo(to t: Double) {
+        guard case .file = source else { return }
+        let target = min(max(0, t), max(0, playbackDuration))
+        procLock.lock()
+        pendingSeekReset = true
+        lastAnalysisT = -1
+        lastPublishT = -1
+        procLock.unlock()
+        playbackFinished = false
+        playbackTime = target
+        fileSource.seek(to: target)
+    }
+
+    /// Pause and move by `frames` frames (negative = backwards).
+    func stepFrame(_ frames: Int) {
+        guard case .file = source else { return }
+        playbackPaused = true
+        seekVideo(to: playbackTime + Double(frames) / fileSource.frameRate)
+    }
+
     func closeVideo() {
         fileSource.stop()
         procLock.lock()
@@ -301,8 +340,12 @@ final class FramePipeline: ObservableObject {
         armed = false
         lastAnalysisT = -1
         lastPublishT = -1
+        chartBuf.removeAll()
+        chartT0 = nil
+        lastChartT = -1
         procLock.unlock()
         renderer?.clear()
+        chart = []
         currentFileURL = nil
         source = .camera
         result = GasFrameResult()
@@ -400,10 +443,45 @@ final class FramePipeline: ObservableObject {
         lastAnalysisT = t
         guard ds.downsample(pb) else { return }
 
+        if pendingSeekReset {
+            an.resetDynamics()
+            chartBuf.removeAll()
+            lastChartT = -1
+            pendingSeekReset = false
+        }
+
         var r = GasFrameResult()
         r.time = t
         if armed {
             r = an.process(bgra: ds.pixels, bytesPerRow: ds.bytesPerRow, time: t)
+        }
+        let (mr, mg, mb) = Self.roiMean(ds, procROI)
+        r.roiMeanR = mr
+        r.roiMeanG = mg
+        r.roiMeanB = mb
+
+        // live curve (≤ 30 points/s, last 125 s)
+        let tc: Double
+        if fromCamera {
+            if chartT0 == nil { chartT0 = t }
+            tc = t - (chartT0 ?? t)
+        } else {
+            tc = t
+        }
+        if tc < lastChartT { chartBuf.removeAll(); lastChartT = -1 }
+        if lastChartT < 0 || tc - lastChartT >= 1.0 / 30 {
+            let code: UInt8
+            switch r.phase {
+            case .waiting: code = 0
+            case .baseline: code = 1
+            case .monitoring: code = 2
+            case .detected: code = 3
+            }
+            chartBuf.append(ChartSample(t: tc, r: mr, g: mg, b: mb, response: r.meanResponse, phase: code))
+            lastChartT = tc
+            if let cut = chartBuf.firstIndex(where: { tc - $0.t <= 125 }), cut > 0 {
+                chartBuf.removeFirst(cut)
+            }
         }
 
         // overlay
@@ -426,12 +504,33 @@ final class FramePipeline: ObservableObject {
                 ? Histogram.compute(bgra: ds.pixels, width: ds.width, height: ds.height, bytesPerRow: ds.bytesPerRow)
                 : nil
             let fps = fpsValue
+            let curve: [ChartSample]? = procDisplay.showChart ? chartBuf : nil
             DispatchQueue.main.async {
                 self.result = r
                 if let hist { self.histogram = hist }
+                if let curve { self.chart = curve }
                 self.measuredFPS = fps
             }
         }
+    }
+
+    /// Mean raw R, G, B (0–255) of the ROI on the analysis grid.
+    private static func roiMean(_ ds: FrameDownsampler, _ roi: NormRect) -> (Float, Float, Float) {
+        let x0 = max(0, min(ds.width - 1, Int(roi.x0 * CGFloat(ds.width))))
+        let x1 = max(x0 + 1, min(ds.width, Int(roi.x1 * CGFloat(ds.width))))
+        let y0 = max(0, min(ds.height - 1, Int(roi.y0 * CGFloat(ds.height))))
+        let y1 = max(y0 + 1, min(ds.height, Int(roi.y1 * CGFloat(ds.height))))
+        var sr = 0, sg = 0, sb = 0
+        let px = ds.pixels
+        for y in y0..<y1 {
+            let row = px + y * ds.bytesPerRow
+            for x in x0..<x1 {
+                let p = row + x * 4
+                sb += Int(p[0]); sg += Int(p[1]); sr += Int(p[2])
+            }
+        }
+        let n = Float(max(1, (x1 - x0) * (y1 - y0)))
+        return (Float(sr) / n, Float(sg) / n, Float(sb) / n)
     }
 
     private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!

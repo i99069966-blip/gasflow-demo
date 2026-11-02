@@ -61,7 +61,7 @@ struct PreviewOverlay: View {
 
             ROIEditor(roi: $pipeline.roi, size: size, editing: editROI)
 
-            if let h = r.hotspot, r.phase == .detected || r.maxResponse > 0 {
+            if opt.showHotspot, let h = r.hotspot, r.phase == .detected {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.white)

@@ -38,6 +38,7 @@ final class GasAnalyzer {
     private let valid: UnsafeMutablePointer<UInt8>
 
     private var nBaseline = 0
+    private var baselineStart: Double?
     private(set) var ready = false
     private(set) var validCount = 0
     private var noiseMedian: Float = 0
@@ -106,6 +107,7 @@ final class GasAnalyzer {
     /// Start collecting a new reference image.
     func resetBaseline() {
         nBaseline = 0
+        baselineStart = nil
         ready = false
         mean.update(repeating: 0, count: count)
         m2.update(repeating: 0, count: count)
@@ -114,6 +116,12 @@ final class GasAnalyzer {
         resp.update(repeating: 0, count: count)
         lastSource = nil
         hasLastArrival = false
+        resetArrivals(keepGhost: false)
+    }
+
+    /// After a jump in time (video seek): clear temporal state, keep the baseline.
+    func resetDynamics() {
+        resp.update(repeating: 0, count: count)
         resetArrivals(keepGhost: false)
     }
 
@@ -151,12 +159,18 @@ final class GasAnalyzer {
         result.time = time
 
         if !ready {
+            if let s = baselineStart, time < s {      // time went backwards (video seek): start over
+                resetBaseline()
+            }
+            if baselineStart == nil { baselineStart = time }
             accumulateBaseline(bgra: bgra, bytesPerRow: bytesPerRow)
-            if nBaseline >= params.baselineFrames {
+            let elapsed = time - (baselineStart ?? time)
+            let need = max(0.05, params.baselineSeconds)
+            if elapsed >= need && nBaseline >= 3 {
                 finishBaseline(time: time)
                 result.phase = .monitoring
             } else {
-                result.phase = .baseline(progress: Float(nBaseline) / Float(max(1, params.baselineFrames)))
+                result.phase = .baseline(progress: Float(min(0.99, elapsed / need)))
             }
             result.validPixels = validCount
             return result
@@ -426,7 +440,11 @@ final class GasAnalyzer {
                     continue
                 }
                 let v = max(0, min(1, resp[i] * scale))
-                let alpha = min(1, v * 1.4) * op
+                // Fade in between ½·threshold and 1½·threshold so sub-threshold noise
+                // (light flicker, sensor noise) never shimmers on the preview.
+                let th = max(thr[i], 1e-3)
+                let fade = max(0, min(1, (resp[i] - 0.5 * th) / th))
+                let alpha = min(1, v * 1.4) * fade * op
                 let li = Int(v * 255) * 3
                 rgba[o] = UInt8(Float(lut[li]) * alpha)
                 rgba[o + 1] = UInt8(Float(lut[li + 1]) * alpha)

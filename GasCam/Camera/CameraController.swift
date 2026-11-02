@@ -39,6 +39,7 @@ final class CameraController: NSObject, ObservableObject {
         var focusAuto = true
         var lensPosition: Float = 0.5
         var torch: Float = 0
+        var zoom: CGFloat = 1
     }
     private var desired = Desired()
 
@@ -71,6 +72,24 @@ final class CameraController: NSObject, ObservableObject {
 
     @Published var hasTorch = false
     @Published var torchLevel: Float = 0
+
+    /// Digital zoom on the current lens (1 = native field of view of that lens).
+    @Published var zoomFactor: CGFloat = 1
+    @Published var maxZoom: CGFloat = 1
+    /// Optical factor of the current lens relative to the 1x wide camera (0.5 for ultra-wide).
+    var lensFactor: Double { lenses.first(where: { $0.id == currentLensID })?.sortKey ?? 1 }
+    /// What the user sees: lens factor × digital zoom ("1.4x").
+    var effectiveZoom: Double { lensFactor * Double(zoomFactor) }
+
+    /// Resolution / frame-rate combinations of the current lens, e.g. "1080p：最高 240 fps".
+    @Published var capabilities: [String] = []
+    static let modelIdentifier: String = {
+        var info = utsname()
+        uname(&info)
+        return withUnsafePointer(to: &info.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) { String(cString: $0) }
+        }
+    }()
 
     @Published var statusMessage: String?
 
@@ -287,6 +306,21 @@ final class CameraController: NSObject, ObservableObject {
         applyWhiteBalance()
         applyFocus()
         applyTorch()
+        applyZoom()
+    }
+
+    private func applyZoom() {
+        guard let dev = device else { return }
+        let maxZ = min(dev.maxAvailableVideoZoomFactor, dev.activeFormat.videoMaxZoomFactor, 10)
+        let z = min(max(desired.zoom, dev.minAvailableVideoZoomFactor), maxZ)
+        desired.zoom = z
+        do {
+            try dev.lockForConfiguration()
+            dev.videoZoomFactor = z
+            dev.unlockForConfiguration()
+        } catch {
+            report("变焦设置失败: \(error.localizedDescription)")
+        }
     }
 
     private func publishDeviceState(_ dev: AVCaptureDevice) {
@@ -298,7 +332,17 @@ final class CameraController: NSObject, ObservableObject {
         let torch = dev.hasTorch
         let manualFocus = dev.isLockingFocusWithCustomLensPositionSupported
         let id = dev.uniqueID
+        let maxZ = max(1, min(dev.maxAvailableVideoZoomFactor, fmt.videoMaxZoomFactor, 10))
+        var caps: [String] = []
+        for r in VideoResolution.allCases {
+            let rates = dev.formats
+                .filter { Self.dims($0) == (r.width, r.height) }
+                .flatMap { $0.videoSupportedFrameRateRanges.map { $0.maxFrameRate } }
+            if let m = rates.max() { caps.append("\(r.label)：最高 \(Int(m.rounded())) fps") }
+        }
         DispatchQueue.main.async {
+            self.maxZoom = maxZ
+            self.capabilities = caps
             self.isoRange = isoR
             self.shutterRange = shR
             self.biasRange = biasR
@@ -324,6 +368,7 @@ final class CameraController: NSObject, ObservableObject {
             self.focusAuto = s.focusAuto
             self.lensPosition = s.lensPosition
             self.torchLevel = s.torch
+            self.zoomFactor = s.zoom
         }
     }
 
@@ -451,6 +496,7 @@ final class CameraController: NSObject, ObservableObject {
         currentLensID = id
         sessionQueue.async {
             guard let dev = self.devicesByID[id], dev != self.device else { return }
+            self.desired.zoom = 1
             self.switchInput(to: dev)
         }
         onSettingsChanged?()
@@ -570,6 +616,24 @@ final class CameraController: NSObject, ObservableObject {
             self.applyFocus()
         }
         onSettingsChanged?()
+    }
+
+    func setZoom(_ z: CGFloat) {
+        zoomFactor = z
+        sessionQueue.async {
+            self.desired.zoom = z
+            self.applyZoom()
+        }
+        onSettingsChanged?()
+    }
+
+    /// Longest shutter that integrates whole flicker periods of mains-powered lights
+    /// (lights flicker at 2 × mains frequency) and still fits in one frame. nil if impossible.
+    func flickerFreeShutter(mainsHz: Double) -> Double? {
+        let period = 1 / (2 * mainsHz)
+        let maxDur = min(1 / max(frameRate, 1), shutterRange.upperBound)
+        let k = (maxDur / period + 1e-6).rounded(.down)
+        return k >= 1 ? k * period : nil
     }
 
     func setTorch(_ level: Float) {
@@ -698,6 +762,9 @@ final class CameraController: NSObject, ObservableObject {
             "focus_auto": focusAuto,
             "lens_position": lensPosition,
             "torch_level": torchLevel,
+            "digital_zoom": Double(zoomFactor),
+            "effective_zoom": effectiveZoom,
+            "device_model": Self.modelIdentifier,
         ]
     }
 }

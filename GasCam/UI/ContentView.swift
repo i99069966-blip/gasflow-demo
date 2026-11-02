@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var activeControl: CameraControlKind?
     @State private var showSettings = false
     @State private var editROI = false
+    @State private var showGasPanel = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -22,7 +23,14 @@ struct ContentView: View {
                             ControlPanel(kind: c)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        GasStatusBar()
+                        if showGasPanel {
+                            GasQuickPanel()
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        if pipeline.display.showChart {
+                            ChartPanel()
+                        }
+                        GasStatusBar(showGasPanel: $showGasPanel)
                         if pipeline.source == .camera {
                             CameraBottomBar(active: $activeControl, showSettings: $showSettings)
                         } else {

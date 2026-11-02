@@ -107,7 +107,7 @@ struct SettingsView: View {
         } header: {
             Text("视频分析（离线 / 模拟器测试）")
         } footer: {
-            Text("导入的视频走与实时相机完全相同的检测流程：前 \(pipeline.params.baselineFrames) 帧作基线。在 iOS 模拟器中没有相机，可把视频拖进模拟器的“照片”后从这里导入。")
+            Text("导入的视频走与实时相机完全相同的检测流程：默认用开头 \(String(format: "%.1f", pipeline.params.baselineSeconds)) 秒作基线；也可以拖动进度条到任意位置后点 BASELINE，从那里重新取基线。")
         }
     }
 
@@ -150,6 +150,8 @@ struct SettingsView: View {
             Toggle("中心十字", isOn: $pipeline.display.crosshair)
             Toggle("水平仪（镜头朝下）", isOn: $pipeline.display.level)
             Toggle("显示气源箭头", isOn: $pipeline.display.showArrow)
+            Toggle("显示最大响应点（十字）", isOn: $pipeline.display.showHotspot)
+            Toggle("显示 R 变化曲线", isOn: $pipeline.display.showChart)
             ValueSlider(label: "叠加透明", value: $pipeline.display.overlayOpacity, range: 0.1...1.0) { String(format: "%.2f", $0) }
         }
     }
@@ -177,7 +179,7 @@ struct SettingsView: View {
     private var advancedSection: some View {
         Section {
             Stepper("空间平滑半径: \(pipeline.params.blurRadius)", value: $pipeline.params.blurRadius, in: 0...8)
-            Stepper("基线帧数: \(pipeline.params.baselineFrames)", value: $pipeline.params.baselineFrames, in: 5...300, step: 5)
+            ValueSlider(label: "基线时长", value: $pipeline.params.baselineSeconds, range: 0.2...10) { String(format: "%.1f s", $0) }
             Stepper("确认帧数: \(pipeline.params.confirmFrames)", value: $pipeline.params.confirmFrames, in: 1...10)
             ValueSlider(label: "时间平滑", value: $pipeline.params.emaAlpha, range: 0.05...1) { String(format: "α %.2f", $0) }
             Picker("分析频率", selection: $pipeline.params.analysisRate) {
@@ -204,9 +206,18 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
     private var aboutSection: some View {
+        Section("本机能力（当前镜头）") {
+            LabeledContent("机型代号", value: CameraController.modelIdentifier)
+            ForEach(camera.capabilities, id: \.self) { line in
+                Text(line).font(Theme.mono(12))
+            }
+            Text("FPS 菜单里只会列出这台手机硬件支持的组合。码率是否真正达到，以录制结束时提示的“实际码率 / 实际帧率 / 丢帧”为准。")
+                .font(.footnote).foregroundStyle(.gray)
+        }
         Section("关于") {
-            LabeledContent("版本", value: "1.0")
+            LabeledContent("版本", value: "1.1")
             LabeledContent("分析网格", value: "长边 256 px")
             Text("参考实现：tools/gas_reference.py（与 App 算法逐步一致，可在电脑上复现 App 的结果）。")
                 .font(.footnote).foregroundStyle(.gray)

@@ -48,12 +48,12 @@ def signal_of(rgb, channel):
 
 class GasAnalyzer:
     def __init__(self, roi=(0.03, 0.06, 0.92, 0.58), channel="R", polarity=-1,
-                 blur_radius=2, baseline_frames=30, ema_alpha=0.5,
+                 blur_radius=2, baseline_seconds=1.0, ema_alpha=0.5,
                  k_sigma=4.0, min_pct=2.0, confirm_frames=2,
                  min_arrived_frac=0.01, display_max_pct=12.0):
         self.roi = roi
         self.channel, self.polarity = channel, polarity
-        self.blur_radius, self.baseline_frames = blur_radius, baseline_frames
+        self.blur_radius, self.baseline_seconds = blur_radius, baseline_seconds
         self.ema_alpha, self.k_sigma, self.min_pct = ema_alpha, k_sigma, min_pct
         self.confirm_frames = confirm_frames
         self.min_arrived_frac = min_arrived_frac
@@ -67,6 +67,7 @@ class GasAnalyzer:
     # -- state
     def reset_baseline(self):
         self.n = 0
+        self.baseline_start = None
         self.mean = np.zeros((H, W), np.float64)
         self.m2 = np.zeros((H, W), np.float64)
         self.max_rgb = np.zeros((H, W), np.float64)
@@ -87,13 +88,15 @@ class GasAnalyzer:
         rgb = rgb_u8.astype(np.float32)
         s = box_blur(box_blur(signal_of(rgb, self.channel), self.blur_radius), self.blur_radius)
         if not self.ready:
+            if self.baseline_start is None:
+                self.baseline_start = t
             self.n += 1
             d = s - self.mean
             self.mean += d / self.n
             self.m2 += d * (s - self.mean)
             self.max_rgb = np.maximum(self.max_rgb, rgb.max(axis=2))
             self.min_rgb = np.minimum(self.min_rgb, rgb.min(axis=2))
-            if self.n >= self.baseline_frames:
+            if t - self.baseline_start >= self.baseline_seconds and self.n >= 3:
                 var = self.m2 / max(self.n - 1, 1)
                 mu = np.maximum(self.mean, 1e-3)
                 self.sigma_pct = 100.0 * np.sqrt(var) / mu

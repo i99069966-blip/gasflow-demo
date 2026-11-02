@@ -19,6 +19,13 @@ struct DisplayOptions: Equatable, Codable {
     var level = false
     var showHistogram = true
     var showArrow = true
+    /// Cross on the pixel with the largest response (off by default: it jumps around on noise).
+    var showHotspot = false
+    /// Live R curve panel.
+    var showChart = true
+    var chartMode: ChartMode = .raw
+    var chartWindow: Double = 30
+    var chartShowGB = false
 }
 
 /// Core Image → Metal preview. Camera frames and the analysis overlay arrive from the frame

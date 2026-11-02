@@ -3,6 +3,7 @@ import SwiftUI
 /// Gas detection status + BASELINE / RESET + overlay mode.
 struct GasStatusBar: View {
     @EnvironmentObject var pipeline: FramePipeline
+    @Binding var showGasPanel: Bool
 
     var body: some View {
         let r = pipeline.result
@@ -20,6 +21,14 @@ struct GasStatusBar: View {
                     .font(Theme.mono(13, .semibold))
                 }
                 Spacer(minLength: 4)
+                Button { withAnimation(.easeOut(duration: 0.15)) { showGasPanel.toggle() } } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 32, height: 30)
+                        .background(showGasPanel ? Theme.accent : Color.white.opacity(0.15))
+                        .foregroundStyle(showGasPanel ? Color.black : Color.white)
+                        .clipShape(Capsule())
+                }
                 Button { pipeline.startBaseline() } label: {
                     Text("BASELINE").font(Theme.mono(12, .bold))
                         .padding(.horizontal, 10).padding(.vertical, 7)
@@ -116,7 +125,9 @@ struct CameraBottomBar: View {
     }
 
     private var lensLabel: String {
-        camera.lenses.first(where: { $0.id == camera.currentLensID })?.label ?? "LENS"
+        guard let l = camera.lenses.first(where: { $0.id == camera.currentLensID }) else { return "LENS" }
+        if l.label == "FRONT" || camera.zoomFactor <= 1.001 { return l.label }
+        return String(format: "%.1fx", camera.effectiveZoom)
     }
 
     private func toggle(_ k: CameraControlKind) {
@@ -145,30 +156,50 @@ struct CameraBottomBar: View {
     }
 }
 
-/// Video-file mode: transport controls.
+/// Video-file mode: scrubbing, frame stepping, play/pause, speed.
 struct PlaybackBar: View {
     @EnvironmentObject var pipeline: FramePipeline
     @Binding var showSettings: Bool
+    @State private var scrubbing = false
+    @State private var scrubValue: Double = 0
     static let speeds: [(String, Double)] = [("0.1×", 0.1), ("0.25×", 0.25), ("0.5×", 0.5), ("1×", 1), ("2×", 2), ("MAX", 0)]
     private var speeds: [(String, Double)] { Self.speeds }
 
     var body: some View {
-        VStack(spacing: 8) {
-            ProgressView(value: min(pipeline.playbackTime, max(pipeline.playbackDuration, 0.001)),
-                         total: max(pipeline.playbackDuration, 0.001))
-                .tint(Theme.accent)
-            HStack(spacing: 10) {
-                if pipeline.display.showHistogram {
-                    HistogramView(histogram: pipeline.histogram).frame(width: 90, height: 44)
-                }
+        let dur = max(pipeline.playbackDuration, 0.01)
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Text(String(format: "%.2f", scrubbing ? scrubValue : pipeline.playbackTime))
+                    .font(Theme.mono(11)).frame(width: 46, alignment: .leading)
+                Slider(value: Binding(get: { scrubbing ? scrubValue : min(pipeline.playbackTime, dur) },
+                                      set: { v in
+                                          scrubValue = v
+                                          scrubbing = true
+                                      }),
+                       in: 0...dur,
+                       onEditingChanged: { editing in
+                           if editing {
+                               scrubbing = true
+                           } else {
+                               pipeline.seekVideo(to: scrubValue)
+                               scrubbing = false
+                           }
+                       })
+                    .tint(Theme.accent)
+                Text(String(format: "%.2f s", dur))
+                    .font(Theme.mono(11)).foregroundStyle(.gray).frame(width: 54, alignment: .trailing)
+            }
+            HStack(spacing: 14) {
+                Button { pipeline.stepFrame(-1) } label: { Image(systemName: "backward.frame.fill") }
                 Button {
                     if pipeline.playbackFinished { pipeline.restartVideo() } else { pipeline.playbackPaused.toggle() }
                 } label: {
                     Image(systemName: pipeline.playbackFinished ? "arrow.counterclockwise"
                           : (pipeline.playbackPaused ? "play.fill" : "pause.fill"))
                         .font(.system(size: 22, weight: .bold))
-                        .frame(width: 48, height: 40)
+                        .frame(width: 40, height: 34)
                 }
+                Button { pipeline.stepFrame(1) } label: { Image(systemName: "forward.frame.fill") }
                 Menu {
                     ForEach(speeds.indices, id: \.self) { i in
                         Button(speeds[i].0) { pipeline.playbackSpeed = speeds[i].1 }
@@ -176,16 +207,14 @@ struct PlaybackBar: View {
                 } label: {
                     Text(speeds.first(where: { $0.1 == pipeline.playbackSpeed })?.0 ?? "1×")
                         .font(Theme.mono(13, .bold))
-                        .frame(width: 56, height: 32)
+                        .frame(width: 52, height: 30)
                         .background(Color.white.opacity(0.12))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
-                Spacer()
+                Spacer(minLength: 0)
                 Button { pipeline.saveResultImage() } label: { Image(systemName: "camera.viewfinder") }
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                Button { pipeline.closeVideo() } label: {
-                    Label("相机", systemImage: "xmark.circle.fill").font(Theme.mono(12, .bold))
-                }
+                Button { pipeline.closeVideo() } label: { Image(systemName: "xmark.circle.fill") }
             }
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(.white)
@@ -212,6 +241,7 @@ struct AssistColumn: View {
             AssistToggle(text: "LVL", isOn: pipeline.display.level) { pipeline.display.level.toggle() }
             AssistToggle(text: "ROI", isOn: editROI) { editROI.toggle() }
             AssistToggle(text: "➚", isOn: pipeline.display.showArrow) { pipeline.display.showArrow.toggle() }
+            AssistToggle(text: "CRV", isOn: pipeline.display.showChart) { pipeline.display.showChart.toggle() }
         }
     }
 }

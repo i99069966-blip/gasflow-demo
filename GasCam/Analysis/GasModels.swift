@@ -38,8 +38,9 @@ struct GasParams: Equatable, Codable {
     var polarity: ResponsePolarity = .decrease
     /// Box-blur radius (analysis pixels). Applied twice ≈ Gaussian.
     var blurRadius: Int = 2
-    /// Frames averaged for the baseline (reference) image.
-    var baselineFrames: Int = 30
+    /// Duration (s) averaged for the baseline (reference) image, starting when BASELINE is pressed
+    /// (or at the start / current position of a video).
+    var baselineSeconds: Double = 1.0
     /// Temporal EMA weight of the newest frame (1 = no smoothing).
     var emaAlpha: Float = 0.5
     /// Pixel is "active" when response > max(minPercent, kSigma · baseline noise).
@@ -66,7 +67,7 @@ struct GasParams: Equatable, Codable {
 
     /// Changing these invalidates the baseline.
     func requiresRebaseline(comparedTo o: GasParams) -> Bool {
-        channel != o.channel || blurRadius != o.blurRadius || baselineFrames != o.baselineFrames
+        channel != o.channel || blurRadius != o.blurRadius || baselineSeconds != o.baselineSeconds
     }
 }
 
@@ -138,6 +139,27 @@ struct GasFrameResult: Equatable {
     var lastSource: GasSource? = nil
     var validPixels: Int = 0
     var noiseMedianPercent: Float = 0
+    /// Raw mean colour of the ROI (0–255), filled by the pipeline every analysed frame.
+    var roiMeanR: Float = 0
+    var roiMeanG: Float = 0
+    var roiMeanB: Float = 0
+}
+
+/// One point of the live curve.
+struct ChartSample: Equatable {
+    var t: Double            // seconds (video time, or seconds since the camera session started)
+    var r: Float             // ROI mean R, raw 0–255
+    var g: Float
+    var b: Float
+    var response: Float      // mean ΔS% in ROI (0 before a baseline exists)
+    /// 0 waiting, 1 taking baseline, 2 monitoring, 3 gas detected
+    var phase: UInt8
+}
+
+enum ChartMode: String, CaseIterable, Identifiable, Codable {
+    case raw, response
+    var id: String { rawValue }
+    var label: String { self == .raw ? "R 原始值" : "ΔR/R %" }
 }
 
 enum OverlayMode: String, CaseIterable, Identifiable, Codable {
