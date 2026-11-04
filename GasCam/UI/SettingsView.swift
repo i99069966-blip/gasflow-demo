@@ -217,7 +217,7 @@ struct SettingsView: View {
                 .font(.footnote).foregroundStyle(.gray)
         }
         Section("关于") {
-            LabeledContent("版本", value: "1.1")
+            LabeledContent("版本", value: "1.2")
             LabeledContent("分析网格", value: "长边 256 px")
             Text("参考实现：tools/gas_reference.py（与 App 算法逐步一致，可在电脑上复现 App 的结果）。")
                 .font(.footnote).foregroundStyle(.gray)

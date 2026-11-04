@@ -32,6 +32,14 @@ final class GasAnalyzer {
     private let arrival: UnsafeMutablePointer<Float>      // seconds since origin, −1 = not reached
     private let lastArrival: UnsafeMutablePointer<Float>  // snapshot of the previous event
     private let run: UnsafeMutablePointer<Int32>
+
+    // Frame-difference (FLOW) history: ring of past response maps.
+    private static let historySlots = 64
+    private let history: UnsafeMutablePointer<Float>
+    private var historyTimes = [Double](repeating: -Double.infinity, count: GasAnalyzer.historySlots)
+    private var historyHead = 0
+    private var historyCount = 0
+    private var flowPast = -1
     private let maxRGB: UnsafeMutablePointer<UInt8>
     private let minRGB: UnsafeMutablePointer<UInt8>
     private let saturationOK: UnsafeMutablePointer<UInt8>
@@ -74,12 +82,15 @@ final class GasAnalyzer {
         run = UnsafeMutablePointer<Int32>.allocate(capacity: width * height)
         run.initialize(repeating: 0, count: width * height)
         maxRGB = u(); minRGB = u(); saturationOK = u(); valid = u()
+        history = UnsafeMutablePointer<Float>.allocate(capacity: GasAnalyzer.historySlots * width * height)
+        history.initialize(repeating: 0, count: GasAnalyzer.historySlots * width * height)
         resetBaseline()
     }
 
     deinit {
         for p in [sig, tmp, mean, m2, thr, resp, arrival, lastArrival] { p.deallocate() }
         run.deallocate()
+        history.deallocate()
         for p in [maxRGB, minRGB, saturationOK, valid] { p.deallocate() }
     }
 
@@ -116,12 +127,40 @@ final class GasAnalyzer {
         resp.update(repeating: 0, count: count)
         lastSource = nil
         hasLastArrival = false
+        clearHistory()
         resetArrivals(keepGhost: false)
+    }
+
+    private func clearHistory() {
+        historyHead = 0
+        historyCount = 0
+        flowPast = -1
+    }
+
+    /// Store the current response map and pick the one closest to `flowLagSeconds` ago.
+    private func pushHistory(time: Double) {
+        let n = GasAnalyzer.historySlots
+        let slot = historyHead
+        (history + slot * count).update(from: resp, count: count)
+        historyTimes[slot] = time
+        historyHead = (historyHead + 1) % n
+        historyCount = min(n, historyCount + 1)
+        let target = time - max(0.01, params.flowLagSeconds)
+        var best = -1, oldest = -1
+        var bestT = -Double.infinity, oldestT = Double.infinity
+        for k in 1..<max(2, historyCount) where k < historyCount {
+            let s = (slot - k + n) % n
+            let ts = historyTimes[s]
+            if ts <= target && ts > bestT { best = s; bestT = ts }
+            if ts < oldestT { oldest = s; oldestT = ts }
+        }
+        flowPast = best >= 0 ? best : oldest
     }
 
     /// After a jump in time (video seek): clear temporal state, keep the baseline.
     func resetDynamics() {
         resp.update(repeating: 0, count: count)
+        clearHistory()
         resetArrivals(keepGhost: false)
     }
 
@@ -246,6 +285,7 @@ final class GasAnalyzer {
             }
         }
 
+        pushHistory(time: time)
         result.source = currentSource
         result.lastSource = lastSource
         result.phase = order.isEmpty ? .monitoring : .detected
@@ -431,6 +471,31 @@ final class GasAnalyzer {
         switch mode {
         case .live:
             rgba.update(repeating: 0, count: count * 4)
+        case .flow:
+            guard ready, flowPast >= 0 else {
+                rgba.update(repeating: 0, count: count * 4)
+                return
+            }
+            let past = history + flowPast * count
+            let inv = 1 / max(params.flowScalePercent, 0.05)
+            for i in 0..<count {
+                let o = i * 4
+                guard valid[i] != 0 else {
+                    rgba[o] = 0; rgba[o + 1] = 0; rgba[o + 2] = 0; rgba[o + 3] = 0
+                    continue
+                }
+                let v = max(-1, min(1, (resp[i] - past[i]) * inv))
+                let av = abs(v)
+                // hide the smallest changes (noise), then fade in
+                let a = max(0, min(1, (av - 0.15) / 0.3)) * min(1, av * 1.3) * op
+                let r: Float = v >= 0 ? 255 : 0
+                let g: Float = v >= 0 ? 60 * (1 - av) : 120 * (1 - av)
+                let b: Float = v >= 0 ? 0 : 255
+                rgba[o] = UInt8(r * a)
+                rgba[o + 1] = UInt8(g * a)
+                rgba[o + 2] = UInt8(b * a)
+                rgba[o + 3] = UInt8(255 * a)
+            }
         case .heat:
             let scale = 1 / max(params.displayMaxPercent, 0.1)
             for i in 0..<count {

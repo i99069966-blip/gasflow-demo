@@ -64,6 +64,10 @@ struct GasParams: Equatable, Codable {
     var analysisRate: Double = 30
     /// Lock AE / AWB / AF when a new baseline is taken (strongly recommended for measurements).
     var lockCameraOnBaseline: Bool = true
+    /// FLOW (frame difference): compare the response now with the response `flowLagSeconds` ago.
+    var flowLagSeconds: Double = 0.2
+    /// FLOW colour scale: change (%) that maps to full red / full blue.
+    var flowScalePercent: Float = 3
 
     /// Changing these invalidates the baseline.
     func requiresRebaseline(comparedTo o: GasParams) -> Bool {
@@ -163,12 +167,13 @@ enum ChartMode: String, CaseIterable, Identifiable, Codable {
 }
 
 enum OverlayMode: String, CaseIterable, Identifiable, Codable {
-    case live, heat, arrival
+    case live, heat, flow, arrival
     var id: String { rawValue }
     var label: String {
         switch self {
         case .live: return "LIVE"
         case .heat: return "HEAT"
+        case .flow: return "FLOW"
         case .arrival: return "ARRIVAL"
         }
     }

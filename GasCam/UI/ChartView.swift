@@ -194,6 +194,14 @@ struct GasQuickPanel: View {
             ValueSlider(label: "色标上限", value: $pipeline.params.displayMaxPercent, range: 1...40) {
                 String(format: "%.0f%%", $0)
             }
+            ValueSlider(label: "帧差间隔", value: $pipeline.params.flowLagSeconds, range: 0.05...1.5) {
+                String(format: "%.2f s", $0)
+            }
+            ValueSlider(label: "帧差色标", value: $pipeline.params.flowScalePercent, range: 0.5...10) {
+                String(format: "%.1f%%", $0)
+            }
+            Text("FLOW = 现在与“帧差间隔”之前相比：红 = R 正在下降（气体进来），蓝 = R 在恢复（气体离开）。")
+                .font(Theme.mono(10)).foregroundStyle(.gray)
             Text(pipeline.source == .camera
                  ? "点 BASELINE 后，从此刻起取上面设定时长的画面平均作为基线。"
                  : "视频：先拖进度条到要作基线的位置（暂停也可以），再点 BASELINE。")

@@ -47,7 +47,7 @@ struct GasStatusBar: View {
                     ForEach(OverlayMode.allCases) { m in Text(m.label).tag(m) }
                 }
                 .pickerStyle(.segmented)
-                .frame(maxWidth: 230)
+                .frame(maxWidth: 270)
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 0) {
                     Text(String(format: "Δ %.2f%%  max %.1f%%", r.meanResponse, r.maxResponse))
