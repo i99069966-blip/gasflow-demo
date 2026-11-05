@@ -144,9 +144,19 @@ struct GasFrameResult: Equatable {
     var validPixels: Int = 0
     var noiseMedianPercent: Float = 0
     /// Raw mean colour of the ROI (0–255), filled by the pipeline every analysed frame.
+    /// While taking the baseline: frames collected / frames needed.
+    var baselineFrames: Int = 0
+    var baselineTarget: Int = 0
     var roiMeanR: Float = 0
     var roiMeanG: Float = 0
     var roiMeanB: Float = 0
+}
+
+/// Video analysis: where (in video seconds) the baseline was taken and the gas first arrived.
+struct VideoMarks: Equatable {
+    var baselineStart: Double?
+    var baselineEnd: Double?
+    var firstArrival: Double?
 }
 
 /// One point of the live curve.

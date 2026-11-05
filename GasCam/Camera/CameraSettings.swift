@@ -40,6 +40,8 @@ struct RecordSettings: Equatable, Codable {
     var bitrateMbps: Double = 50
     var saveToPhotos: Bool = true
     var writeCSV: Bool = true
+    /// Record the microphone into the .mov (AAC).
+    var recordAudio: Bool = true
 
     static let bitratePresets: [Double] = [10, 20, 35, 50, 80, 120, 200]
 }

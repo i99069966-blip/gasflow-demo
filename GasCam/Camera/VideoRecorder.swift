@@ -9,12 +9,16 @@ final class VideoRecorder {
         var fps: Double
         var codec: VideoCodec
         var bitrateMbps: Double
+        var recordAudio: Bool = false
     }
 
     private var config: Config?
     private var writer: AVAssetWriter?
     private var input: AVAssetWriterInput?
     private var adaptor: AVAssetWriterInputPixelBufferAdaptor?
+    private var audioInput: AVAssetWriterInput?
+    /// Format of the microphone stream (remembered even when not recording).
+    private var audioFormat: CMFormatDescription?
     private var sessionStarted = false
     private(set) var startTime: CMTime?
     private(set) var lastTime: CMTime?
@@ -35,6 +39,7 @@ final class VideoRecorder {
         config = cfg
         lastConfig = cfg
         lastTime = nil
+        audioInput = nil
         writer = nil
         input = nil
         adaptor = nil
@@ -68,6 +73,16 @@ final class VideoRecorder {
         }
     }
 
+    /// Microphone sample buffers (same queue as video).
+    func appendAudio(_ sb: CMSampleBuffer) {
+        if let f = CMSampleBufferGetFormatDescription(sb) { audioFormat = f }
+        guard config != nil, sessionStarted, let ai = audioInput, let w = writer, w.status == .writing,
+              let start = startTime else { return }
+        let pts = CMSampleBufferGetPresentationTimeStamp(sb)
+        guard CMTimeCompare(pts, start) >= 0 else { return }
+        if ai.isReadyForMoreMediaData { _ = ai.append(sb) }
+    }
+
     func finish(completion: @escaping (URL?, String?) -> Void) {
         guard let cfg = config else {
             completion(nil, nil)
@@ -81,6 +96,8 @@ final class VideoRecorder {
             return
         }
         input?.markAsFinished()
+        audioInput?.markAsFinished()
+        audioInput = nil
         w.finishWriting {
             completion(w.status == .completed ? cfg.url : nil, w.error?.localizedDescription)
         }
@@ -116,6 +133,22 @@ final class VideoRecorder {
                 return
             }
             w.add(inp)
+            if cfg.recordAudio, let fmt = audioFormat,
+               let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(fmt)?.pointee {
+                let ch = max(1, min(2, Int(asbd.mChannelsPerFrame)))
+                let aSettings: [String: Any] = [
+                    AVFormatIDKey: kAudioFormatMPEG4AAC,
+                    AVNumberOfChannelsKey: ch,
+                    AVSampleRateKey: asbd.mSampleRate,
+                    AVEncoderBitRateKey: ch == 1 ? 96_000 : 160_000,
+                ]
+                let ai = AVAssetWriterInput(mediaType: .audio, outputSettings: aSettings, sourceFormatHint: fmt)
+                ai.expectsMediaDataInRealTime = true
+                if w.canAdd(ai) {
+                    w.add(ai)
+                    audioInput = ai
+                }
+            }
             guard w.startWriting() else {
                 lastError = w.error?.localizedDescription ?? "startWriting 失败"
                 config = nil

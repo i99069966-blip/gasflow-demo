@@ -40,11 +40,26 @@ struct TopBar: View {
     private var infoRow: some View {
         HStack(spacing: 8) {
             Text("\(camera.resolution.label) · \(pipeline.recordSettings.codec.label) · \(Int(pipeline.recordSettings.bitrateMbps))Mb/s")
-            Text(String(format: "%.0f°", camera.shutterAngle))
-            if camera.isFullyLocked {
-                Label("LOCK", systemImage: "lock.fill").foregroundStyle(Theme.accent)
+                .lineLimit(1)
+            Spacer(minLength: 2)
+            Button { pipeline.lockAllCamera() } label: {
+                Label("LOCK", systemImage: "lock.fill")
+                    .font(Theme.mono(10, .bold))
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .foregroundStyle(camera.isFullyLocked ? Color.black : Color.white)
+                    .background(camera.isFullyLocked ? Theme.accent : Color.white.opacity(0.15))
+                    .clipShape(Capsule())
             }
-            Spacer()
+            .buttonStyle(.plain)
+            Button { pipeline.autoAllCamera() } label: {
+                Text("A AUTO")
+                    .font(Theme.mono(10, .bold))
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .foregroundStyle(.white)
+                    .background(Color.white.opacity(0.15))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
             if pipeline.isRecording, let start = pipeline.recordingStart {
                 TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
                     let s = Int(ctx.date.timeIntervalSince(start))

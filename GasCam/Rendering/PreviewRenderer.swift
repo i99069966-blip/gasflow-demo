@@ -26,6 +26,8 @@ struct DisplayOptions: Equatable, Codable {
     var chartMode: ChartMode = .raw
     var chartWindow: Double = 30
     var chartShowGB = false
+    /// Microphone level meter (声源显示), Blackmagic style.
+    var showAudioMeter = true
 }
 
 /// Core Image → Metal preview. Camera frames and the analysis overlay arrive from the frame

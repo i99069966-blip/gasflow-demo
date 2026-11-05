@@ -23,6 +23,14 @@ final class CameraController: NSObject, ObservableObject {
 
     /// Every frame (BGRA, upright portrait) on `videoQueue`.
     var frameHandler: ((CVPixelBuffer, CMTime) -> Void)?
+    /// Microphone sample buffers, also on `videoQueue` (so the recorder sees audio and video in order).
+    var audioHandler: ((CMSampleBuffer) -> Void)?
+    private let audioOutput = AVCaptureAudioDataOutput()
+    private var audioInput: AVCaptureDeviceInput?
+    private var lastMeterPublish: Double = 0
+    private var lastAutoTorch: Double = 0
+    /// Read on the video queue to skip work when the auto torch is off.
+    private var torchAutoActive = false
     /// Main thread: a user-initiated change that alters the image (analysis must re-baseline).
     var onSettingsChanged: (() -> Void)?
 
@@ -40,6 +48,7 @@ final class CameraController: NSObject, ObservableObject {
         var lensPosition: Float = 0.5
         var torch: Float = 0
         var zoom: CGFloat = 1
+        var torchAuto = false
     }
     private var desired = Desired()
 
@@ -92,6 +101,14 @@ final class CameraController: NSObject, ObservableObject {
     }()
 
     @Published var statusMessage: String?
+
+    /// Torch brightness follows the scene until the camera is locked (BASELINE / LOCK).
+    @Published var torchAuto = false
+    /// Microphone level (dBFS, −160…0) for the 声源 meter.
+    @Published var audioLevel: Float = -160
+    @Published var audioPeak: Float = -160
+    /// The microphone is part of the capture session.
+    @Published var audioActive = false
 
     var shutterAngle: Double { 360 * shutter * frameRate }
     var isFullyLocked: Bool { !exposureAuto && !wbAuto && !focusAuto }
@@ -368,6 +385,8 @@ final class CameraController: NSObject, ObservableObject {
             self.focusAuto = s.focusAuto
             self.lensPosition = s.lensPosition
             self.torchLevel = s.torch
+            self.torchAuto = s.torchAuto
+            self.torchAutoActive = s.torchAuto
             self.zoomFactor = s.zoom
         }
     }
@@ -638,11 +657,137 @@ final class CameraController: NSObject, ObservableObject {
 
     func setTorch(_ level: Float) {
         torchLevel = level
+        torchAuto = false
+        torchAutoActive = false
         sessionQueue.async {
+            self.desired.torchAuto = false
             self.desired.torch = level
             self.applyTorch()
         }
         onSettingsChanged?()
+    }
+
+    /// Stop the auto torch at its current brightness (no re-baseline: the picture does not change).
+    func freezeTorch() {
+        guard torchAuto else { return }
+        torchAuto = false
+        torchAutoActive = false
+        sessionQueue.async { self.desired.torchAuto = false }
+    }
+
+    func setTorchAuto(_ on: Bool) {
+        let enable = on && hasTorch
+        torchAuto = enable
+        torchAutoActive = enable
+        sessionQueue.async {
+            self.desired.torchAuto = enable
+            if enable && self.desired.torch < 0.02 {
+                self.desired.torch = 0.1
+                self.applyTorch()
+                self.publishDesired()
+            }
+        }
+        onSettingsChanged?()
+    }
+
+    /// One tap: exposure, white balance, focus and torch back to automatic (zoom is left alone).
+    func setAllAuto() {
+        exposureAuto = true
+        wbAuto = true
+        focusAuto = true
+        let torch = hasTorch
+        torchAuto = torch
+        torchAutoActive = torch
+        sessionQueue.async {
+            self.desired.exposureAuto = true
+            self.desired.wbAuto = true
+            self.desired.focusAuto = true
+            self.desired.torchAuto = torch
+            if torch && self.desired.torch < 0.02 { self.desired.torch = 0.1 }
+            self.applyExposure()
+            self.applyWhiteBalance()
+            self.applyFocus()
+            self.applyTorch()
+            self.publishDesired()
+        }
+        onSettingsChanged?()
+    }
+
+    /// Auto torch control loop, called (throttled) from the frame queue with the ROI brightness.
+    /// AE on: raise the torch until AE can run at low ISO (less noise), lower it when there is
+    /// plenty of light. AE off: hold the brightest ROI channel around 185/255.
+    func autoTorchStep(roiMax: Float) {
+        guard torchAutoActive else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastAutoTorch >= 0.33 else { return }
+        lastAutoTorch = now
+        sessionQueue.async {
+            guard let dev = self.device, dev.hasTorch, self.desired.torchAuto else { return }
+            var level = max(0.02, self.desired.torch)
+            if roiMax >= 245 {
+                level /= 1.3
+            } else if self.desired.exposureAuto {
+                let isoTarget = max(dev.activeFormat.minISO * 2, 80)
+                let frame = 1 / max(self.desired.fps, 1)
+                if dev.iso > isoTarget * 1.2 {
+                    level *= 1.15
+                } else if dev.iso <= dev.activeFormat.minISO * 1.05 && dev.exposureDuration.seconds < 0.5 * frame {
+                    level /= 1.15
+                }
+            } else {
+                if roiMax < 175 { level *= 1.1 } else if roiMax > 195 { level /= 1.1 }
+            }
+            level = min(1, max(0.02, level))
+            guard abs(level - self.desired.torch) > 0.005 else { return }
+            self.desired.torch = level
+            self.applyTorch()
+            DispatchQueue.main.async { self.torchLevel = level }
+        }
+    }
+
+    /// Add or remove the microphone (level meter + audio track). Asks for permission when needed.
+    func setAudio(enabled: Bool) {
+        guard enabled else {
+            sessionQueue.async { self.configureAudio(false) }
+            return
+        }
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            sessionQueue.async { self.configureAudio(true) }
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                self.sessionQueue.async { self.configureAudio(granted) }
+            }
+        default:
+            DispatchQueue.main.async {
+                self.audioActive = false
+                self.statusMessage = "没有麦克风权限：声源电平和录音不可用（可在 设置 → GasCam 中打开）"
+            }
+        }
+    }
+
+    private func configureAudio(_ on: Bool) {
+        session.beginConfiguration()
+        if on {
+            if audioInput == nil, let mic = AVCaptureDevice.default(for: .audio),
+               let inp = try? AVCaptureDeviceInput(device: mic), session.canAddInput(inp) {
+                session.addInput(inp)
+                audioInput = inp
+            }
+            if !session.outputs.contains(audioOutput), session.canAddOutput(audioOutput) {
+                audioOutput.setSampleBufferDelegate(self, queue: videoQueue)
+                session.addOutput(audioOutput)
+            }
+        } else {
+            if let inp = audioInput { session.removeInput(inp); audioInput = nil }
+            if session.outputs.contains(audioOutput) { session.removeOutput(audioOutput) }
+        }
+        session.commitConfiguration()
+        let active = audioInput != nil
+        DispatchQueue.main.async {
+            self.audioActive = active
+            if !active { self.audioLevel = -160; self.audioPeak = -160 }
+        }
     }
 
     /// Tap-to-focus/expose. `p` is normalised in the upright portrait image.
@@ -682,6 +827,8 @@ final class CameraController: NSObject, ObservableObject {
             self.desired.wbAuto = false
             self.desired.lensPosition = dev.lensPosition
             self.desired.focusAuto = false
+            self.desired.torchAuto = false
+            self.torchAutoActive = false
             do {
                 try dev.lockForConfiguration()
                 if dev.isExposureModeSupported(.custom) {
@@ -771,8 +918,23 @@ final class CameraController: NSObject, ObservableObject {
 
 // MARK: - Frame delivery
 
-extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
+extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        if output === audioOutput {
+            audioHandler?(sampleBuffer)
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastMeterPublish >= 1.0 / 15 {
+                lastMeterPublish = now
+                let chs = connection.audioChannels
+                let avg = chs.map { $0.averagePowerLevel }.max() ?? -160
+                let peak = chs.map { $0.peakHoldLevel }.max() ?? -160
+                DispatchQueue.main.async {
+                    self.audioLevel = avg
+                    self.audioPeak = peak
+                }
+            }
+            return
+        }
         guard let pb = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         frameHandler?(pb, CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
     }

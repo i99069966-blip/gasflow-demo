@@ -6,12 +6,15 @@ import CoreGraphics
 /// (frames are rotated upright and delivered as BGRA at real-time pace × speed).
 /// Supports seeking and single-frame stepping. Works in the iOS Simulator (no camera needed).
 final class VideoFileSource {
-    /// Frame callback on the playback queue.
-    var frameHandler: ((CVPixelBuffer, CMTime) -> Void)?
+    /// Frame callback on the playback queue. The Bool is true for pre-roll frames (decoded before a
+    /// seek target only so the analysis can warm up; they are not meant to be displayed).
+    var frameHandler: ((CVPixelBuffer, CMTime, Bool) -> Void)?
     /// (current s, duration s) on the main thread, ~10 Hz.
     var onProgress: ((Double, Double) -> Void)?
     /// Main thread. nil = finished normally, otherwise an error message.
     var onFinish: ((String?) -> Void)?
+    /// Main thread: the file's tracks are loaded (frame rate / duration known, scanning possible).
+    var onLoaded: ((Double, Double) -> Void)?
 
     private struct Loaded {
         let asset: AVAsset
@@ -23,6 +26,8 @@ final class VideoFileSource {
     }
 
     private let queue = DispatchQueue(label: "gascam.file.playback", qos: .userInitiated)
+    private let scanQueue = DispatchQueue(label: "gascam.file.scan", qos: .utility)
+    private var scanGeneration = 0
     private let lock = NSLock()
     private var generation = 0
     private var pausedFlag = false
@@ -76,7 +81,10 @@ final class VideoFileSource {
                 let duration = try await asset.load(.duration)
                 let l = Loaded(asset: asset, track: track, size: size, transform: transform, fps: fps, duration: duration)
                 self.lock.lock(); self.loaded = l; self.lock.unlock()
-                self.queue.async { self.readLoop(l, from: 0, generation: gen) }
+                let fpsD = fps > 1 ? Double(fps) : 30
+                let durD = duration.seconds
+                DispatchQueue.main.async { self.onLoaded?(fpsD, durD) }
+                self.queue.async { self.readLoop(l, from: 0, display: 0, generation: gen) }
             } catch {
                 let msg = error.localizedDescription
                 DispatchQueue.main.async { self.onFinish?(msg) }
@@ -84,26 +92,72 @@ final class VideoFileSource {
         }
     }
 
-    /// Jump to `seconds`. When paused, exactly one frame (the one at the new position) is delivered.
-    func seek(to seconds: Double) {
+    /// Jump to `seconds`. Frames from `seconds - preroll` are decoded first and delivered flagged as
+    /// pre-roll; when paused, exactly one displayable frame (the one at the target) is delivered.
+    func seek(to seconds: Double, preroll: Double = 0) {
         lock.lock()
         let l = loaded
         generation += 1
         let gen = generation
         lock.unlock()
         guard let l else { return }
-        queue.async { self.readLoop(l, from: seconds, generation: gen) }
+        let target = max(0, seconds)
+        queue.async { self.readLoop(l, from: max(0, target - max(0, preroll)), display: target, generation: gen) }
     }
 
-    func stop() {
-        _ = bumpGeneration()
+    /// Decode the whole file quickly at reduced size (for the full-length curve). Runs on its own
+    /// queue; a newer call or `cancelScan()` stops an older scan.
+    func scan(handler: @escaping (CVPixelBuffer, Double) -> Void,
+              progress: @escaping (Double) -> Void,
+              completion: @escaping (Bool) -> Void) {
+        lock.lock()
+        let l = loaded
+        scanGeneration += 1
+        let gen = scanGeneration
+        lock.unlock()
+        guard let l else { completion(false); return }
+        scanQueue.async {
+            let total = max(l.duration.seconds, 0.001)
+            guard let pair = self.makeReader(l, from: 0, maxWidth: 270) else {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
+            let (reader, output) = pair
+            var lastP = 0.0
+            var ok = true
+            while true {
+                self.lock.lock(); let current = gen == self.scanGeneration; self.lock.unlock()
+                if !current { ok = false; break }
+                guard let sb = output.copyNextSampleBuffer() else { break }
+                guard let pb = CMSampleBufferGetImageBuffer(sb) else { continue }
+                let ts = CMSampleBufferGetPresentationTimeStamp(sb).seconds
+                handler(pb, ts)
+                if ts - lastP > total / 50 {
+                    lastP = ts
+                    DispatchQueue.main.async { progress(min(1, ts / total)) }
+                }
+            }
+            if reader.status == .failed { ok = false }
+            reader.cancelReading()
+            let finished = ok
+            DispatchQueue.main.async { completion(finished) }
+        }
     }
 
-    private func readLoop(_ l: Loaded, from startSeconds: Double, generation gen: Int) {
-        guard isCurrent(gen) else { return }
-        // Video composition that applies the track's rotation (portrait iPhone videos).
+    func cancelScan() {
+        lock.lock(); scanGeneration += 1; lock.unlock()
+    }
+
+    /// Reader + composition output delivering upright BGRA frames, optionally scaled down.
+    private func makeReader(_ l: Loaded, from start: Double, maxWidth: CGFloat? = nil)
+        -> (AVAssetReader, AVAssetReaderVideoCompositionOutput)? {
         let rect = CGRect(origin: .zero, size: l.size).applying(l.transform)
-        let renderSize = CGSize(width: abs(rect.width).rounded(), height: abs(rect.height).rounded())
+        var renderSize = CGSize(width: abs(rect.width).rounded(), height: abs(rect.height).rounded())
+        var scale: CGFloat = 1
+        if let mw = maxWidth, renderSize.width > mw {
+            scale = mw / renderSize.width
+            renderSize = CGSize(width: (renderSize.width * scale).rounded(), height: (renderSize.height * scale).rounded())
+        }
         let comp = AVMutableVideoComposition()
         comp.renderSize = renderSize
         let rate = l.fps > 1 ? l.fps : 30
@@ -111,41 +165,43 @@ final class VideoFileSource {
         let instruction = AVMutableVideoCompositionInstruction()
         instruction.timeRange = CMTimeRange(start: .zero, duration: l.duration)
         let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: l.track)
-        let fixed = l.transform.concatenating(CGAffineTransform(translationX: -rect.origin.x, y: -rect.origin.y))
+        let fixed = l.transform
+            .concatenating(CGAffineTransform(translationX: -rect.origin.x, y: -rect.origin.y))
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
         layer.setTransform(fixed, at: .zero)
         instruction.layerInstructions = [layer]
         comp.instructions = [instruction]
-
-        let reader: AVAssetReader
-        do {
-            reader = try AVAssetReader(asset: l.asset)
-        } catch {
-            let msg = error.localizedDescription
-            DispatchQueue.main.async { self.onFinish?(msg) }
-            return
-        }
-        let total = l.duration.seconds
-        let lastFrame = max(0, total - 1 / Double(rate))
-        let start = min(max(0, startSeconds), lastFrame)
+        guard let reader = try? AVAssetReader(asset: l.asset) else { return nil }
         if start > 0 {
-            let s = CMTime(seconds: start, preferredTimescale: 600)
-            reader.timeRange = CMTimeRange(start: s, end: l.duration)
+            reader.timeRange = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600), end: l.duration)
         }
         let output = AVAssetReaderVideoCompositionOutput(
             videoTracks: [l.track],
             videoSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
         output.videoComposition = comp
         output.alwaysCopiesSampleData = false
-        guard reader.canAdd(output) else {
+        guard reader.canAdd(output) else { return nil }
+        reader.add(output)
+        guard reader.startReading() else { return nil }
+        return (reader, output)
+    }
+
+    func stop() {
+        _ = bumpGeneration()
+    }
+
+    private func readLoop(_ l: Loaded, from startSeconds: Double, display displaySeconds: Double, generation gen: Int) {
+        guard isCurrent(gen) else { return }
+        let total = l.duration.seconds
+        let rate = l.fps > 1 ? Double(l.fps) : 30
+        let lastFrame = max(0, total - 1 / rate)
+        let start = min(max(0, startSeconds), lastFrame)
+        let displayFrom = min(max(start, displaySeconds), lastFrame) - 0.5 / rate
+        guard let pair = makeReader(l, from: start) else {
             DispatchQueue.main.async { self.onFinish?("无法读取该视频") }
             return
         }
-        reader.add(output)
-        guard reader.startReading() else {
-            let msg = reader.error?.localizedDescription ?? "无法读取该视频"
-            DispatchQueue.main.async { self.onFinish?(msg) }
-            return
-        }
+        let (reader, output) = pair
 
         var anchorPTS: Double?
         var anchorWall = 0.0
@@ -166,6 +222,10 @@ final class VideoFileSource {
             guard let pb = CMSampleBufferGetImageBuffer(sb) else { continue }
             let pts = CMSampleBufferGetPresentationTimeStamp(sb)
             let ts = pts.seconds
+            if ts < displayFrom {                        // pre-roll: analyse only, no pacing
+                frameHandler?(pb, pts, true)
+                continue
+            }
             let sp = speed
             if anchorPTS == nil || sp != anchorSpeed {
                 anchorPTS = lastPTS >= 0 ? lastPTS : ts
@@ -177,7 +237,7 @@ final class VideoFileSource {
                 if wait > 0 { Thread.sleep(forTimeInterval: min(wait, 1)) }
             }
             guard isCurrent(gen) else { break }
-            frameHandler?(pb, pts)
+            frameHandler?(pb, pts, false)
             delivered += 1
             lastPTS = ts
             let now = clock()

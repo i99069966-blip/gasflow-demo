@@ -182,7 +182,13 @@ struct ControlPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             if camera.hasTorch {
                 HStack(spacing: 6) {
-                    PillButton(text: "OFF", selected: camera.torchLevel <= 0.001) { camera.setTorch(0) }
+                    PillButton(text: "AUTO", selected: camera.torchAuto) { camera.setTorchAuto(!camera.torchAuto) }
+                    Text(camera.torchAuto ? "自动：按画面亮度调节，BASELINE / LOCK 时固定" : "手动")
+                        .font(Theme.mono(10)).foregroundStyle(.gray)
+                    Spacer()
+                }
+                HStack(spacing: 6) {
+                    PillButton(text: "OFF", selected: !camera.torchAuto && camera.torchLevel <= 0.001) { camera.setTorch(0) }
                     ForEach(CameraPresets.torchPresets, id: \.self) { lvl in
                         PillButton(text: "\(Int(lvl * 100))%", selected: abs(camera.torchLevel - lvl) < 0.01) { camera.setTorch(lvl) }
                     }

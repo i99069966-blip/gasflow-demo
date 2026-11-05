@@ -40,7 +40,8 @@ struct ContentView: View {
                     .padding(.bottom, 4)
                 }
                 .overlay(alignment: .topTrailing) {
-                    AssistColumn(editROI: $editROI)
+                    AssistColumn(editROI: $editROI,
+                                 forceCollapsed: showGasPanel || (pipeline.source == .camera && activeControl != nil))
                         .padding(.top, 8)
                         .padding(.trailing, 6)
                 }

@@ -46,6 +46,9 @@ final class GasAnalyzer {
     private let valid: UnsafeMutablePointer<UInt8>
 
     private var nBaseline = 0
+    /// Number of analysed frames averaged into the baseline (set by the pipeline from
+    /// baselineSeconds × effective analysis rate).
+    var baselineTargetFrames = 30
     private var baselineStart: Double?
     private(set) var ready = false
     private(set) var validCount = 0
@@ -157,6 +160,15 @@ final class GasAnalyzer {
         flowPast = best >= 0 ? best : oldest
     }
 
+    /// Video scrubbing: restart the EMA / frame-difference history at the new position but
+    /// keep the baseline, the arrival map and the source estimate.
+    func seekReset() {
+        resp.update(repeating: 0, count: count)
+        run.update(repeating: 0, count: count)
+        clearHistory()
+        quietSince = nil
+    }
+
     /// After a jump in time (video seek): clear temporal state, keep the baseline.
     func resetDynamics() {
         resp.update(repeating: 0, count: count)
@@ -186,7 +198,10 @@ final class GasAnalyzer {
 
     // MARK: - Per frame
 
-    func process(bgra: UnsafePointer<UInt8>, bytesPerRow: Int, time: Double) -> GasFrameResult {
+    /// `registerArrivals = false` while scrubbing / pre-rolling a video: the response, heat map and
+    /// FLOW are computed but the arrival map is left untouched.
+    func process(bgra: UnsafePointer<UInt8>, bytesPerRow: Int, time: Double,
+                 registerArrivals: Bool = true) -> GasFrameResult {
         extractSignal(bgra: bgra, bytesPerRow: bytesPerRow)
         let r = max(0, params.blurRadius)
         if r > 0 {
@@ -203,13 +218,14 @@ final class GasAnalyzer {
             }
             if baselineStart == nil { baselineStart = time }
             accumulateBaseline(bgra: bgra, bytesPerRow: bytesPerRow)
-            let elapsed = time - (baselineStart ?? time)
-            let need = max(0.05, params.baselineSeconds)
-            if elapsed >= need && nBaseline >= 3 {
+            let target = max(3, baselineTargetFrames)
+            result.baselineFrames = nBaseline
+            result.baselineTarget = target
+            if nBaseline >= target {
                 finishBaseline(time: time)
                 result.phase = .monitoring
             } else {
-                result.phase = .baseline(progress: Float(min(0.99, elapsed / need)))
+                result.phase = .baseline(progress: Float(nBaseline) / Float(target))
             }
             result.validPixels = validCount
             return result
@@ -244,6 +260,7 @@ final class GasAnalyzer {
             if e > maxV { maxV = e; maxIdx = i }
             if e > thr[i] {
                 activeN += 1
+                if !registerArrivals { continue }
                 run[i] += 1
                 if run[i] == confirm && arrival[i] < 0 {
                     arrival[i] = t
@@ -253,8 +270,8 @@ final class GasAnalyzer {
                     if firstArrival == nil { firstArrival = Double(t) }
                 }
             } else {
-                run[i] = 0
-                if track && e < 0.5 * thr[i] {
+                if registerArrivals { run[i] = 0 }
+                if track && registerArrivals && e < 0.5 * thr[i] {
                     mean[i] += beta * (sig[i] - mean[i])
                 }
             }
@@ -274,7 +291,7 @@ final class GasAnalyzer {
         currentSource = estimateSource()
 
         // Auto re-arm after the plume has gone.
-        if !order.isEmpty && params.autoRearmSeconds > 0 {
+        if registerArrivals && !order.isEmpty && params.autoRearmSeconds > 0 {
             if result.activeFraction < 0.002 {
                 if quietSince == nil { quietSince = time }
                 if let q = quietSince, time - q >= params.autoRearmSeconds {

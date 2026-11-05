@@ -67,7 +67,8 @@ struct GasStatusBar: View {
         let (text, color): (String, Color) = {
             switch r.phase {
             case .waiting: return ("待机", .gray)
-            case .baseline(let p): return ("基线 \(Int(p * 100))%", .blue)
+            case .baseline(let p):
+                return (r.baselineTarget > 0 ? "基线 \(r.baselineFrames)/\(r.baselineTarget)帧" : "基线 \(Int(p * 100))%", .blue)
             case .monitoring: return ("监测中", .green)
             case .detected: return ("检测到气体", .red)
             }
@@ -94,6 +95,10 @@ struct CameraBottomBar: View {
             if pipeline.display.showHistogram {
                 HistogramView(histogram: pipeline.histogram)
                     .frame(width: 104, height: 52)
+            }
+            if pipeline.display.showAudioMeter && camera.audioActive {
+                AudioMeterView(level: camera.audioLevel, peak: camera.audioPeak)
+                    .frame(width: 22, height: 52)
             }
             Spacer(minLength: 0)
             VStack(spacing: 6) {
@@ -156,7 +161,7 @@ struct CameraBottomBar: View {
     }
 }
 
-/// Video-file mode: scrubbing, frame stepping, play/pause, speed.
+/// Video-file mode: live scrubbing, frame stepping, play/pause, speed.
 struct PlaybackBar: View {
     @EnvironmentObject var pipeline: FramePipeline
     @Binding var showSettings: Bool
@@ -173,15 +178,23 @@ struct PlaybackBar: View {
                     .font(Theme.mono(11)).frame(width: 46, alignment: .leading)
                 Slider(value: Binding(get: { scrubbing ? scrubValue : min(pipeline.playbackTime, dur) },
                                       set: { v in
+                                          if !scrubbing {
+                                              scrubbing = true
+                                              pipeline.beginScrub()
+                                          }
                                           scrubValue = v
-                                          scrubbing = true
+                                          pipeline.scrub(to: v)       // picture follows the finger
                                       }),
                        in: 0...dur,
                        onEditingChanged: { editing in
                            if editing {
-                               scrubbing = true
+                               if !scrubbing {
+                                   scrubbing = true
+                                   scrubValue = pipeline.playbackTime
+                                   pipeline.beginScrub()
+                               }
                            } else {
-                               pipeline.seekVideo(to: scrubValue)
+                               pipeline.endScrub(at: scrubValue)
                                scrubbing = false
                            }
                        })
@@ -226,12 +239,69 @@ struct PlaybackBar: View {
     }
 }
 
+/// Blackmagic-style microphone level meter (声源): −60…0 dBFS with peak hold.
+struct AudioMeterView: View {
+    let level: Float
+    let peak: Float
+
+    var body: some View {
+        Canvas { ctx, size in
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black.opacity(0.55)))
+            func frac(_ db: Float) -> CGFloat { CGFloat(max(0, min(1, (db + 60) / 60))) }
+            let barW = size.width - 8
+            let h = size.height - 4
+            let lv = frac(level) * h
+            // green / yellow / red segments
+            let segments: [(Float, Float, Color)] = [(-60, -12, .green), (-12, -3, .yellow), (-3, 0, .red)]
+            for (lo, hi, c) in segments {
+                let y0 = frac(lo) * h, y1 = min(frac(hi) * h, lv)
+                if y1 > y0 {
+                    ctx.fill(Path(CGRect(x: 4, y: size.height - 2 - y1, width: barW, height: y1 - y0)), with: .color(c))
+                }
+            }
+            let py = size.height - 2 - frac(peak) * h
+            ctx.fill(Path(CGRect(x: 2, y: py - 1, width: size.width - 4, height: 2)), with: .color(.white))
+            for db: Float in [-12, -24, -36, -48] {
+                let y = size.height - 2 - frac(db) * h
+                ctx.fill(Path(CGRect(x: 0, y: y, width: 3, height: 0.5)), with: .color(.white.opacity(0.5)))
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.2), lineWidth: 0.5))
+        .overlay(alignment: .top) {
+            Text("dB").font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundStyle(.gray).offset(y: -9)
+        }
+    }
+}
+
 /// Vertical assist toggles on the right edge of the preview.
 struct AssistColumn: View {
     @EnvironmentObject var pipeline: FramePipeline
     @Binding var editROI: Bool
+    /// Collapsed automatically while a bottom panel is open so the two never overlap.
+    var forceCollapsed = false
+    @State private var expanded = true
 
     var body: some View {
+        VStack(spacing: 6) {
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() }
+            } label: {
+                Image(systemName: (expanded && !forceCollapsed) ? "chevron.up" : "slider.vertical.3")
+                    .font(.system(size: 13, weight: .bold))
+                    .frame(width: 40, height: 26)
+                    .background(Color.black.opacity(0.55))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            if expanded && !forceCollapsed {
+                toggles
+            }
+        }
+    }
+
+    private var toggles: some View {
         VStack(spacing: 6) {
             AssistToggle(text: "FC", isOn: pipeline.display.falseColor) { pipeline.display.falseColor.toggle() }
             AssistToggle(text: "ZEB", isOn: pipeline.display.zebra) { pipeline.display.zebra.toggle() }

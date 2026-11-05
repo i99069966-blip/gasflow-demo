@@ -131,6 +131,7 @@ struct SettingsView: View {
             .disabled(pipeline.isRecording)
             Toggle("录完存入相册", isOn: $pipeline.recordSettings.saveToPhotos)
             Toggle("同时写 CSV 分析日志", isOn: $pipeline.recordSettings.writeCSV)
+            Toggle("录制声音（麦克风）", isOn: $pipeline.recordSettings.recordAudio)
         } header: {
             Text("录制")
         } footer: {
@@ -152,6 +153,7 @@ struct SettingsView: View {
             Toggle("显示气源箭头", isOn: $pipeline.display.showArrow)
             Toggle("显示最大响应点（十字）", isOn: $pipeline.display.showHotspot)
             Toggle("显示 R 变化曲线", isOn: $pipeline.display.showChart)
+            Toggle("声源显示（麦克风电平表）", isOn: $pipeline.display.showAudioMeter)
             ValueSlider(label: "叠加透明", value: $pipeline.display.overlayOpacity, range: 0.1...1.0) { String(format: "%.2f", $0) }
         }
     }
@@ -217,7 +219,7 @@ struct SettingsView: View {
                 .font(.footnote).foregroundStyle(.gray)
         }
         Section("关于") {
-            LabeledContent("版本", value: "1.2")
+            LabeledContent("版本", value: "1.3")
             LabeledContent("分析网格", value: "长边 256 px")
             Text("参考实现：tools/gas_reference.py（与 App 算法逐步一致，可在电脑上复现 App 的结果）。")
                 .font(.footnote).foregroundStyle(.gray)

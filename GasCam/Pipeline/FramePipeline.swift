@@ -22,12 +22,27 @@ final class FramePipeline: ObservableObject {
     @Published private(set) var measuredFPS: Double = 0
     /// Live curve samples (ROI mean R/G/B and response), published ~15 Hz.
     @Published private(set) var chart: [ChartSample] = []
+    /// Video mode: full-length curve from a quick pre-scan (response filled once a baseline exists).
+    @Published private(set) var videoCurve: [ChartSample] = []
+    /// Video pre-scan progress 0…1 (1 = done).
+    @Published private(set) var scanProgress: Double = 0
+    /// Video mode: when the baseline was taken and when gas first arrived (video seconds).
+    @Published private(set) var marks = VideoMarks()
+    /// While the user drags the progress bar: the time under the finger.
+    @Published private(set) var scrubTime: Double?
+    /// Analysed frames per second actually used (min of analysis rate and source frame rate).
+    @Published private(set) var effectiveAnalysisRate: Double = 30
     @Published private(set) var isRecording = false
     @Published private(set) var recordingStart: Date?
     @Published private(set) var playbackTime: Double = 0
     @Published private(set) var playbackDuration: Double = 0
     @Published private(set) var playbackFinished = false
-    @Published var playbackPaused = false { didSet { fileSource.paused = playbackPaused } }
+    @Published var playbackPaused = false {
+        didSet {
+            fileSource.paused = playbackPaused
+            procLock.lock(); procPaused = playbackPaused; procLock.unlock()
+        }
+    }
     @Published var playbackSpeed: Double = 1 { didSet { fileSource.speed = playbackSpeed } }
     @Published var toast: String?
 
@@ -36,6 +51,8 @@ final class FramePipeline: ObservableObject {
             guard params != oldValue else { return }
             Self.store(params, "gas.params")
             procLock.lock(); procParams = params; paramsDirty = true; procLock.unlock()
+            updateEffectiveRate()
+            if params.channel != oldValue.channel || params.polarity != oldValue.polarity { rebuildVideoCurve() }
         }
     }
     @Published var roi: NormRect {
@@ -43,6 +60,7 @@ final class FramePipeline: ObservableObject {
             guard roi != oldValue else { return }
             Self.store(roi, "gas.roi")
             procLock.lock(); procROI = roi; roiDirty = true; procLock.unlock()
+            if case .file = source { scheduleRescan() }
         }
     }
     @Published var display: DisplayOptions {
@@ -50,11 +68,19 @@ final class FramePipeline: ObservableObject {
             guard display != oldValue else { return }
             Self.store(display, "display.options")
             renderer?.options = display
+            if display.showAudioMeter != oldValue.showAudioMeter {
+                camera.setAudio(enabled: display.showAudioMeter || recordSettings.recordAudio)
+            }
             procLock.lock(); procDisplay = display; procLock.unlock()
         }
     }
     @Published var recordSettings: RecordSettings {
-        didSet { Self.store(recordSettings, "record.settings") }
+        didSet {
+            Self.store(recordSettings, "record.settings")
+            if recordSettings.recordAudio != oldValue.recordAudio {
+                camera.setAudio(enabled: display.showAudioMeter || recordSettings.recordAudio)
+            }
+        }
     }
 
     let camera: CameraController
@@ -62,6 +88,13 @@ final class FramePipeline: ObservableObject {
     private let fileSource = VideoFileSource()
     private let recorder = VideoRecorder()
     private var currentFileURL: URL?
+    private var fileFPS: Double = 30
+    private var cancellables = Set<AnyCancellable>()
+    private var scanRaw: [ChartSample] = []
+    private var rescanWork: DispatchWorkItem?
+    private var scrubWasPaused = false
+    private var lastScrubSeek: TimeInterval = 0
+    private var pendingScrubTarget: Double?
 
     // MARK: Processing state (guarded by procLock)
 
@@ -93,6 +126,11 @@ final class FramePipeline: ObservableObject {
     private var chartT0: Double?
     private var lastChartT: Double = -1
     private var pendingSeekReset = false
+    private var forceAnalyze = false
+    private var procPaused = false
+    private var lastDisplayT: Double = -1
+    private var procBaselineTarget = 30
+    private var procMarks = VideoMarks()
 
     init(camera: CameraController) {
         self.camera = camera
@@ -109,9 +147,23 @@ final class FramePipeline: ObservableObject {
         procDisplay = d
         renderer?.options = d
 
-        camera.frameHandler = { [weak self] pb, pts in self?.handle(pb, pts, fromCamera: true) }
+        camera.frameHandler = { [weak self] pb, pts in self?.handle(pb, pts, fromCamera: true, preroll: false) }
+        camera.audioHandler = { [weak self] sb in self?.recorder.appendAudio(sb) }
         camera.onSettingsChanged = { [weak self] in self?.settingsChanged() }
-        fileSource.frameHandler = { [weak self] pb, pts in self?.handle(pb, pts, fromCamera: false) }
+        fileSource.frameHandler = { [weak self] pb, pts, pre in self?.handle(pb, pts, fromCamera: false, preroll: pre) }
+        fileSource.onLoaded = { [weak self] fps, dur in
+            guard let self else { return }
+            self.fileFPS = fps
+            self.playbackDuration = dur
+            self.updateEffectiveRate()
+            self.startScan()
+        }
+        camera.$frameRate
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateEffectiveRate() }
+            .store(in: &cancellables)
+        camera.setAudio(enabled: d.showAudioMeter || recordSettings.recordAudio)
+        updateEffectiveRate()
         fileSource.onProgress = { [weak self] cur, total in
             self?.playbackTime = cur
             self?.playbackDuration = total
@@ -133,6 +185,14 @@ final class FramePipeline: ObservableObject {
 
     /// Take a new reference image and start detecting. Locks the camera first if configured.
     func startBaseline() {
+        if case .file = source {
+            marks = VideoMarks()
+            procLock.lock(); procMarks = VideoMarks(); procLock.unlock()
+            rebuildVideoCurve()
+            // the baseline is built from the frames that follow: keep playing from here
+            if playbackPaused && !playbackFinished { playbackPaused = false }
+        }
+        if source == .camera { camera.freezeTorch() }
         let queue = { [weak self] in
             guard let self else { return }
             self.procLock.lock()
@@ -158,7 +218,38 @@ final class FramePipeline: ObservableObject {
     func resetArrivals() {
         procLock.lock()
         pendingResetArrivals = true
+        procMarks.firstArrival = nil
         procLock.unlock()
+        marks.firstArrival = nil
+        rebuildVideoCurve()
+    }
+
+    /// One tap: freeze exposure, white balance, focus and torch at their current values.
+    func lockAllCamera() {
+        camera.lockAll()
+    }
+
+    /// One tap: exposure, white balance, focus and torch back to automatic.
+    func autoAllCamera() {
+        camera.setAllAuto()
+    }
+
+    /// Frames ↔ seconds for the baseline (uses the effective analysis rate).
+    var baselineFrameCount: Int {
+        max(3, Int((params.baselineSeconds * effectiveAnalysisRate).rounded()))
+    }
+
+    func setBaselineFrames(_ n: Int) {
+        params.baselineSeconds = Double(max(3, n)) / max(1, effectiveAnalysisRate)
+    }
+
+    private func updateEffectiveRate() {
+        let src: Double
+        if case .file = source { src = fileFPS } else { src = max(1, camera.frameRate) }
+        let rate = min(params.analysisRate, src)
+        if effectiveAnalysisRate != rate { effectiveAnalysisRate = rate }
+        let target = max(3, Int((params.baselineSeconds * rate).rounded()))
+        procLock.lock(); procBaselineTarget = target; procLock.unlock()
     }
 
     private func settingsChanged() {
@@ -191,7 +282,8 @@ final class FramePipeline: ObservableObject {
         let base = Self.documentsURL.appendingPathComponent("GasCam_\(stamp)")
         let movURL = base.appendingPathExtension("mov")
         let cfg = VideoRecorder.Config(url: movURL, fps: camera.frameRate,
-                                       codec: recordSettings.codec, bitrateMbps: recordSettings.bitrateMbps)
+                                       codec: recordSettings.codec, bitrateMbps: recordSettings.bitrateMbps,
+                                       recordAudio: recordSettings.recordAudio && camera.audioActive)
 
         // Metadata: camera + analysis settings, for reproducibility.
         var meta: [String: Any] = camera.settingsSnapshot()
@@ -287,12 +379,20 @@ final class FramePipeline: ObservableObject {
         pendingRebaseline = true
         lastAnalysisT = -1
         lastPublishT = -1
+        lastDisplayT = -1
         chartBuf.removeAll()
         chartT0 = nil
         lastChartT = -1
+        procMarks = VideoMarks()
         procLock.unlock()
         renderer?.clear()
         chart = []
+        fileSource.cancelScan()
+        scanRaw = []
+        videoCurve = []
+        scanProgress = 0
+        marks = VideoMarks()
+        scrubTime = nil
         currentFileURL = url
         source = .file(name: url.lastPathComponent)
         playbackFinished = false
@@ -307,20 +407,136 @@ final class FramePipeline: ObservableObject {
         if let url = currentFileURL { openVideo(url: url) }
     }
 
-    /// Jump to a position in the video. The baseline is kept (same scene, same exposure);
-    /// the arrival map, EMA and curve restart from the new position. Press BASELINE to
-    /// take a new reference image from here.
+    /// Jump to a position in the video. Baseline, arrival map and the full curve are kept; the
+    /// picture, heat map and FLOW show the new position (a short pre-roll warms up the analysis).
+    /// Press BASELINE to take a new reference image from here.
     func seekVideo(to t: Double) {
         guard case .file = source else { return }
         let target = min(max(0, t), max(0, playbackDuration))
         procLock.lock()
         pendingSeekReset = true
+        forceAnalyze = true
         lastAnalysisT = -1
         lastPublishT = -1
+        lastDisplayT = -1
         procLock.unlock()
         playbackFinished = false
         playbackTime = target
-        fileSource.seek(to: target)
+        fileSource.seek(to: target, preroll: params.flowLagSeconds + 0.15)
+    }
+
+    // Live scrubbing from the progress bar.
+    func beginScrub() {
+        guard case .file = source else { return }
+        if scrubTime == nil { scrubWasPaused = playbackPaused }
+        playbackPaused = true
+    }
+
+    func scrub(to t: Double) {
+        guard case .file = source else { return }
+        scrubTime = t
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - lastScrubSeek >= 0.08 {
+            lastScrubSeek = now
+            pendingScrubTarget = nil
+            seekVideo(to: t)
+        } else {
+            let first = pendingScrubTarget == nil
+            pendingScrubTarget = t
+            if first {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) { [weak self] in
+                    guard let self, let p = self.pendingScrubTarget, self.scrubTime != nil else { return }
+                    self.pendingScrubTarget = nil
+                    self.lastScrubSeek = ProcessInfo.processInfo.systemUptime
+                    self.seekVideo(to: p)
+                }
+            }
+        }
+    }
+
+    func endScrub(at t: Double) {
+        guard case .file = source else { return }
+        pendingScrubTarget = nil
+        scrubTime = nil
+        seekVideo(to: t)
+        playbackPaused = scrubWasPaused
+    }
+
+    // MARK: - Full-length curve of a video
+
+    private func startScan() {
+        guard case .file = source else { return }
+        scanProgress = 0
+        let roiNow = roi
+        var local: [ChartSample] = []
+        var ds: FrameDownsampler?
+        fileSource.scan(handler: { pb, t in
+            let w = CVPixelBufferGetWidth(pb), h = CVPixelBufferGetHeight(pb)
+            if ds == nil {
+                let (gw, gh) = FrameDownsampler.gridSize(forFrameWidth: w, height: h)
+                ds = FrameDownsampler(width: gw, height: gh)
+            }
+            guard let d = ds, d.downsample(pb) else { return }
+            let (r, g, b) = FramePipeline.roiMean(d, roiNow)
+            local.append(ChartSample(t: t, r: r, g: g, b: b, response: 0, phase: 0))
+        }, progress: { [weak self] p in
+            self?.scanProgress = p
+        }, completion: { [weak self] ok in
+            guard let self else { return }
+            if ok {
+                self.scanRaw = local
+                self.scanProgress = 1
+                self.rebuildVideoCurve()
+            }
+        })
+    }
+
+    private func scheduleRescan() {
+        rescanWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in self?.startScan() }
+        rescanWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: w)
+    }
+
+    /// Fill phase bands and ΔS% of the scanned curve from the current baseline / arrival marks.
+    private func rebuildVideoCurve() {
+        guard case .file = source, !scanRaw.isEmpty else { return }
+        let m = marks
+        let p = params
+        func value(_ s: ChartSample) -> Float {
+            switch p.channel {
+            case .red: return s.r
+            case .green: return s.g
+            case .blue: return s.b
+            case .luma: return 0.2126 * s.r + 0.7152 * s.g + 0.0722 * s.b
+            case .redChroma: return 100 * s.r / max(s.r + s.g + s.b, 1)
+            }
+        }
+        var ref: Float = 0
+        if let b0 = m.baselineStart, let b1 = m.baselineEnd {
+            let base = scanRaw.filter { $0.t >= b0 - 1e-6 && $0.t <= b1 + 1e-6 }
+            if !base.isEmpty { ref = base.reduce(0) { $0 + value($1) } / Float(base.count) }
+        }
+        videoCurve = scanRaw.map { s in
+            var o = s
+            if let b0 = m.baselineStart, s.t >= b0 {
+                if let b1 = m.baselineEnd, s.t > b1 {
+                    o.phase = (m.firstArrival.map { s.t >= $0 } ?? false) ? 3 : 2
+                } else {
+                    o.phase = 1
+                }
+            }
+            if ref > 0 && o.phase >= 2 {
+                var v = 100 * (value(s) - ref) / ref
+                switch p.polarity {
+                case .decrease: v = -v
+                case .increase: break
+                case .both: v = abs(v)
+                }
+                o.response = v
+            }
+            return o
+        }
     }
 
     /// Pause and move by `frames` frames (negative = backwards).
@@ -340,14 +556,20 @@ final class FramePipeline: ObservableObject {
         armed = false
         lastAnalysisT = -1
         lastPublishT = -1
+        lastDisplayT = -1
         chartBuf.removeAll()
         chartT0 = nil
         lastChartT = -1
         procLock.unlock()
         renderer?.clear()
         chart = []
+        fileSource.cancelScan()
+        scanRaw = []
+        videoCurve = []
+        scrubTime = nil
         currentFileURL = nil
         source = .camera
+        updateEffectiveRate()
         result = GasFrameResult()
         camera.start()
     }
@@ -389,13 +611,13 @@ final class FramePipeline: ObservableObject {
 
     // MARK: - Frame handling (camera queue or playback queue)
 
-    private func handle(_ pb: CVPixelBuffer, _ pts: CMTime, fromCamera: Bool) {
+    private func handle(_ pb: CVPixelBuffer, _ pts: CMTime, fromCamera: Bool, preroll: Bool) {
         procLock.lock()
         defer { procLock.unlock() }
         guard fromCamera ? acceptCamera : acceptFile else { return }
 
         if fromCamera { recorder.append(pb, time: pts) }
-        renderer?.enqueue(pb)
+        if !preroll { renderer?.enqueue(pb) }
 
         let t = pts.seconds
         guard t.isFinite else { return }
@@ -433,34 +655,64 @@ final class FramePipeline: ObservableObject {
 
         if paramsDirty { an.update(params: procParams); paramsDirty = false }
         if roiDirty { an.update(roi: procROI); roiDirty = false }
+        an.baselineTargetFrames = procBaselineTarget
         if pendingRebaseline { an.resetBaseline(); pendingRebaseline = false }
         if pendingResetArrivals { an.resetArrivals(keepGhost: false); pendingResetArrivals = false }
+        if pendingSeekReset { an.seekReset(); pendingSeekReset = false }
 
-        // analysis rate limit
-        if lastAnalysisT >= 0 && t >= lastAnalysisT && t - lastAnalysisT < 0.9 / max(1, procParams.analysisRate) {
+        // Video: arrivals are only registered during continuous forward playback,
+        // never while scrubbing, stepping or pre-rolling.
+        var register = fromCamera
+        if !fromCamera && !preroll {
+            let continuous = lastDisplayT >= 0 && t > lastDisplayT && t - lastDisplayT < 0.25
+            register = continuous && !procPaused
+            lastDisplayT = t
+        }
+
+        // analysis rate limit (the frame shown after a seek is always analysed)
+        let forced = !preroll && forceAnalyze
+        if !forced && lastAnalysisT >= 0 && t >= lastAnalysisT && t - lastAnalysisT < 0.9 / max(1, procParams.analysisRate) {
             return
         }
+        if forced { forceAnalyze = false }
         lastAnalysisT = t
         guard ds.downsample(pb) else { return }
-
-        if pendingSeekReset {
-            an.resetDynamics()
-            chartBuf.removeAll()
-            lastChartT = -1
-            pendingSeekReset = false
-        }
 
         var r = GasFrameResult()
         r.time = t
         if armed {
-            r = an.process(bgra: ds.pixels, bytesPerRow: ds.bytesPerRow, time: t)
+            r = an.process(bgra: ds.pixels, bytesPerRow: ds.bytesPerRow, time: t, registerArrivals: register)
         }
+        if preroll { return }       // pre-roll only warms up EMA / FLOW history
         let (mr, mg, mb) = Self.roiMean(ds, procROI)
         r.roiMeanR = mr
         r.roiMeanG = mg
         r.roiMeanB = mb
 
-        // live curve (≤ 30 points/s, last 125 s)
+        if fromCamera {
+            camera.autoTorchStep(roiMax: max(mr, mg, mb))
+        } else {
+            // remember when the baseline was taken / gas arrived, in video time
+            var changed = false
+            if case .baseline = r.phase, r.baselineFrames <= 1 {
+                procMarks = VideoMarks(baselineStart: t, baselineEnd: nil, firstArrival: nil); changed = true
+            }
+            if case .monitoring = r.phase, procMarks.baselineStart != nil, procMarks.baselineEnd == nil {
+                procMarks.baselineEnd = t; changed = true
+            }
+            if case .detected = r.phase, register, procMarks.firstArrival == nil, procMarks.baselineEnd != nil {
+                procMarks.firstArrival = t; changed = true
+            }
+            if changed {
+                let m = procMarks
+                DispatchQueue.main.async {
+                    self.marks = m
+                    self.rebuildVideoCurve()
+                }
+            }
+        }
+
+        // live curve for the camera (≤ 30 points/s, last 125 s); videos use the pre-scanned curve
         let tc: Double
         if fromCamera {
             if chartT0 == nil { chartT0 = t }
@@ -469,7 +721,7 @@ final class FramePipeline: ObservableObject {
             tc = t
         }
         if tc < lastChartT { chartBuf.removeAll(); lastChartT = -1 }
-        if lastChartT < 0 || tc - lastChartT >= 1.0 / 30 {
+        if fromCamera && (lastChartT < 0 || tc - lastChartT >= 1.0 / 30) {
             let code: UInt8
             switch r.phase {
             case .waiting: code = 0
@@ -515,7 +767,7 @@ final class FramePipeline: ObservableObject {
     }
 
     /// Mean raw R, G, B (0–255) of the ROI on the analysis grid.
-    private static func roiMean(_ ds: FrameDownsampler, _ roi: NormRect) -> (Float, Float, Float) {
+    fileprivate static func roiMean(_ ds: FrameDownsampler, _ roi: NormRect) -> (Float, Float, Float) {
         let x0 = max(0, min(ds.width - 1, Int(roi.x0 * CGFloat(ds.width))))
         let x1 = max(x0 + 1, min(ds.width, Int(roi.x1 * CGFloat(ds.width))))
         let y0 = max(0, min(ds.height - 1, Int(roi.y0 * CGFloat(ds.height))))
