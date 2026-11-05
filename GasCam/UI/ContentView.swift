@@ -31,7 +31,7 @@ struct ContentView: View {
                             GasQuickPanel()
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        if pipeline.display.showChart {
+                        if pipeline.display.showChart && !editROI {
                             ChartPanel()
                         }
                         GasStatusBar(showGasPanel: $showGasPanel)
