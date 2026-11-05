@@ -14,7 +14,10 @@
 		5567AD08CA019E4EBC8E2236 /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62D26DC40051CAF58627FD9D /* CameraController.swift */; };
 		7A106B3507F5DE0FA3DCDA4B /* CameraSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD196AC409C640F44479847 /* CameraSettings.swift */; };
 		400895057A7FAFCA01674937 /* VideoRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC9D2240D7D485E772B9A38 /* VideoRecorder.swift */; };
+		FBAC22C94F97636269C68529 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14B5EEFF74B58687C026C37C /* Localization.swift */; };
+		546152095525B8FCE608D693 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98A0884D211F83B226E20756 /* Strings.swift */; };
 		3C8B40F6BD1245264670A64D /* FramePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B78324BC45E88E6CEC6A2B /* FramePipeline.swift */; };
+		4E7DF43B6D2A8BFCBE2B60E3 /* RecordingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33CFDE59C3591B408BAF09 /* RecordingStore.swift */; };
 		10DF852216FF3391C2CD3347 /* VideoFileSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C35D03E154032095FB286D /* VideoFileSource.swift */; };
 		3CFB95721376FD09DDCF3F0D /* MetalPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B51C3F4E1AECDDE0C9094DC /* MetalPreviewView.swift */; };
 		2B8D722BA3DE8FEA9D742C7C /* PreviewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835D0C4C7C5E2B3A1F39E09C /* PreviewRenderer.swift */; };
@@ -25,6 +28,7 @@
 		0D782B8FCBBEAF368C0EA640 /* ControlPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */; };
 		5DE3108726ADEDE6677B92BE /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB45C5FEE899B997B0EF65C /* HistogramView.swift */; };
 		F2A4F6DBCCE8DEF9268C5E84 /* PreviewArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */; };
+		F92B0D847D6D2D8DECF860E3 /* RegionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E868C93E9A48E295E66F06BC /* RegionEditor.swift */; };
 		F98F236486D43872D4B7360D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E3CF39D7795486E18D43C3 /* SettingsView.swift */; };
 		21D9DD3CFE734C8CCF68D63C /* TopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 359AFBA3C7547820E027888F /* TopBar.swift */; };
 		358C46EB318B0AAD4F668993 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7B60FA8C97F93E0936CE91CE /* Assets.xcassets */; };
@@ -35,6 +39,7 @@
 		F5BF48AA40CAD7891EB709FC /* GasCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GasCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0B51C3F4E1AECDDE0C9094DC /* MetalPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalPreviewView.swift; sourceTree = "<group>"; };
 		0DC9D2240D7D485E772B9A38 /* VideoRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRecorder.swift; sourceTree = "<group>"; };
+		14B5EEFF74B58687C026C37C /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 		1627B0F655F3D44658867B0E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2D1B4A7191B74A6ED7C450F9 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		359AFBA3C7547820E027888F /* TopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopBar.swift; sourceTree = "<group>"; };
@@ -48,13 +53,16 @@
 		88189A9FEA84A6400C0302E9 /* Bars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bars.swift; sourceTree = "<group>"; };
 		9771A28B0B89ED6E78451BBE /* GasCamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasCamApp.swift; sourceTree = "<group>"; };
 		97E3CF39D7795486E18D43C3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		98A0884D211F83B226E20756 /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		9B3E2F1450D8145CFAEF8235 /* GasModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasModels.swift; sourceTree = "<group>"; };
 		9DFF4B63DD6588FE031C961D /* FrameDownsampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameDownsampler.swift; sourceTree = "<group>"; };
 		A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArea.swift; sourceTree = "<group>"; };
 		AC18D468BADB09EC38EBD5CC /* ChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartView.swift; sourceTree = "<group>"; };
 		BDB45C5FEE899B997B0EF65C /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
 		DBD196AC409C640F44479847 /* CameraSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSettings.swift; sourceTree = "<group>"; };
+		DD33CFDE59C3591B408BAF09 /* RecordingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingStore.swift; sourceTree = "<group>"; };
 		DE83B17165685B997360D815 /* GasCam-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GasCam-Info.plist"; sourceTree = "<group>"; };
+		E868C93E9A48E295E66F06BC /* RegionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionEditor.swift; sourceTree = "<group>"; };
 		F0B78324BC45E88E6CEC6A2B /* FramePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramePipeline.swift; sourceTree = "<group>"; };
 		FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlPanel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -110,8 +118,18 @@
 			isa = PBXGroup;
 			children = (
 				F0B78324BC45E88E6CEC6A2B /* FramePipeline.swift */,
+				DD33CFDE59C3591B408BAF09 /* RecordingStore.swift */,
 			);
 			path = Pipeline;
+			sourceTree = "<group>";
+		};
+		4C5A617557D43614E4AE55C0 /* Localization */ = {
+			isa = PBXGroup;
+			children = (
+				14B5EEFF74B58687C026C37C /* Localization.swift */,
+				98A0884D211F83B226E20756 /* Strings.swift */,
+			);
+			path = Localization;
 			sourceTree = "<group>";
 		};
 		617A0525487C0F0642726EBD /* Rendering */ = {
@@ -144,6 +162,7 @@
 				FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */,
 				BDB45C5FEE899B997B0EF65C /* HistogramView.swift */,
 				A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */,
+				E868C93E9A48E295E66F06BC /* RegionEditor.swift */,
 				97E3CF39D7795486E18D43C3 /* SettingsView.swift */,
 				359AFBA3C7547820E027888F /* TopBar.swift */,
 			);
@@ -155,6 +174,7 @@
 			children = (
 				6E00B4CFC291541ACDA57DB7 /* Analysis */,
 				1214AF78C28F29A64F7F3099 /* Camera */,
+				4C5A617557D43614E4AE55C0 /* Localization */,
 				2C25B656F0419F9DB4765C99 /* Pipeline */,
 				0CCC2DE9244B69A951CBC6EE /* Playback */,
 				617A0525487C0F0642726EBD /* Rendering */,
@@ -241,7 +261,10 @@
 				5567AD08CA019E4EBC8E2236 /* CameraController.swift in Sources */,
 				7A106B3507F5DE0FA3DCDA4B /* CameraSettings.swift in Sources */,
 				400895057A7FAFCA01674937 /* VideoRecorder.swift in Sources */,
+				FBAC22C94F97636269C68529 /* Localization.swift in Sources */,
+				546152095525B8FCE608D693 /* Strings.swift in Sources */,
 				3C8B40F6BD1245264670A64D /* FramePipeline.swift in Sources */,
+				4E7DF43B6D2A8BFCBE2B60E3 /* RecordingStore.swift in Sources */,
 				10DF852216FF3391C2CD3347 /* VideoFileSource.swift in Sources */,
 				3CFB95721376FD09DDCF3F0D /* MetalPreviewView.swift in Sources */,
 				2B8D722BA3DE8FEA9D742C7C /* PreviewRenderer.swift in Sources */,
@@ -252,6 +275,7 @@
 				0D782B8FCBBEAF368C0EA640 /* ControlPanel.swift in Sources */,
 				5DE3108726ADEDE6677B92BE /* HistogramView.swift in Sources */,
 				F2A4F6DBCCE8DEF9268C5E84 /* PreviewArea.swift in Sources */,
+				F92B0D847D6D2D8DECF860E3 /* RegionEditor.swift in Sources */,
 				F98F236486D43872D4B7360D /* SettingsView.swift in Sources */,
 				21D9DD3CFE734C8CCF68D63C /* TopBar.swift in Sources */,
 				6D98FD82395FC2BB2C849D55 /* GasCamApp.swift in Sources */,
@@ -337,7 +361,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -346,6 +370,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄 LSPR 基板并实时检测气体的扩散与来源方向。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "显示声源电平，并把声音录进实验视频（可在设置中关闭）。";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "把录像和分析结果图保存到相册。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "录像改名时，找到相册里的那份并换成新名字。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -356,7 +381,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3;
+				MARKETING_VERSION = 1.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "jp.lab.lspr.GasCam";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -373,7 +398,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -382,6 +407,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄 LSPR 基板并实时检测气体的扩散与来源方向。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "显示声源电平，并把声音录进实验视频（可在设置中关闭）。";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "把录像和分析结果图保存到相册。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "录像改名时，找到相册里的那份并换成新名字。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -392,7 +418,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3;
+				MARKETING_VERSION = 1.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "jp.lab.lspr.GasCam";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

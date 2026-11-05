@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Blackmagic-style RGB + luma histogram.
+/// Blackmagic-style RGB histogram.
 struct HistogramView: View {
     let histogram: Histogram
 
@@ -33,7 +33,6 @@ struct HistogramView: View {
             ctx.fill(area(histogram.g), with: .color(.green.opacity(0.55)))
             ctx.fill(area(histogram.b), with: .color(.blue.opacity(0.7)))
             ctx.blendMode = .normal
-            ctx.stroke(area(histogram.y), with: .color(.white.opacity(0.85)), lineWidth: 1)
             if histogram.clipped > 0.001 {
                 ctx.fill(Path(CGRect(x: size.width - 3, y: 0, width: 3, height: size.height)), with: .color(.red))
             }

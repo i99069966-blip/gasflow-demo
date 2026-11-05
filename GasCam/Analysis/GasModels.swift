@@ -16,6 +16,16 @@ enum SignalChannel: String, CaseIterable, Identifiable, Codable {
         case .redChroma: return "r = R/(R+G+B)"
         }
     }
+    /// Signal value of a raw (0–255) colour.
+    func value(r: Float, g: Float, b: Float) -> Float {
+        switch self {
+        case .red: return r
+        case .green: return g
+        case .blue: return b
+        case .luma: return 0.2126 * r + 0.7152 * g + 0.0722 * b
+        case .redChroma: return 100 * r / max(r + g + b, 1)
+        }
+    }
 }
 
 /// Sign of the expected optical change. The LSPR film in the test video shows R decreasing.
@@ -68,10 +78,42 @@ struct GasParams: Equatable, Codable {
     var flowLagSeconds: Double = 0.2
     /// FLOW colour scale: change (%) that maps to full red / full blue.
     var flowScalePercent: Float = 3
+    /// Divide the signal by the reference box (white paper / grey card) every frame.
+    var useReference: Bool = false
+    /// Heat-map colour scale follows the data (live: slowly adapting with a floor; video: one scale
+    /// for the whole file). Off = fixed `displayMaxPercent`.
+    var autoScale: Bool = true
+    /// A region counts as "reached" when this fraction of its pixels has been reached.
+    var regionArrivalFraction: Float = 0.10
 
     /// Changing these invalidates the baseline.
     func requiresRebaseline(comparedTo o: GasParams) -> Bool {
         channel != o.channel || blurRadius != o.blurRadius || baselineSeconds != o.baselineSeconds
+            || useReference != o.useReference
+    }
+
+    /// Lowest top-of-scale for the automatic colour scale (keeps noise from filling the colour range).
+    var autoScaleFloor: Float { max(2 * minPercent, 3) }
+}
+
+extension GasParams {
+    /// Tolerant decoding: settings saved by an older version keep their values, new fields get defaults.
+    init(from decoder: Decoder) throws {
+        self.init()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func get<T: Decodable>(_ k: CodingKeys, _ v: inout T) {
+            if let x = try? c.decodeIfPresent(T.self, forKey: k) { v = x }
+        }
+        get(.channel, &channel); get(.polarity, &polarity); get(.blurRadius, &blurRadius)
+        get(.baselineSeconds, &baselineSeconds); get(.emaAlpha, &emaAlpha); get(.kSigma, &kSigma)
+        get(.minPercent, &minPercent); get(.confirmFrames, &confirmFrames)
+        get(.minArrivedFraction, &minArrivedFraction); get(.displayMaxPercent, &displayMaxPercent)
+        get(.arrivalSpan, &arrivalSpan); get(.directionConfMin, &directionConfMin)
+        get(.autoRearmSeconds, &autoRearmSeconds); get(.baselineTracking, &baselineTracking)
+        get(.analysisRate, &analysisRate); get(.lockCameraOnBaseline, &lockCameraOnBaseline)
+        get(.flowLagSeconds, &flowLagSeconds); get(.flowScalePercent, &flowScalePercent)
+        get(.useReference, &useReference); get(.autoScale, &autoScale)
+        get(.regionArrivalFraction, &regionArrivalFraction)
     }
 }
 
@@ -82,10 +124,26 @@ struct NormRect: Equatable, Codable {
     var x1: CGFloat
     var y1: CGFloat
 
-    static let defaultROI = NormRect(x0: 0.05, y0: 0.05, x1: 0.95, y1: 0.60)
+    static let full = NormRect(x0: 0, y0: 0, x1: 1, y1: 1)
 
     var width: CGFloat { x1 - x0 }
     var height: CGFloat { y1 - y0 }
+
+    init(x0: CGFloat, y0: CGFloat, x1: CGFloat, y1: CGFloat) {
+        self.x0 = x0; self.y0 = y0; self.x1 = x1; self.y1 = y1
+    }
+
+    /// Rectangle spanned by two corner points (any order).
+    init(_ a: CGPoint, _ b: CGPoint) {
+        x0 = min(a.x, b.x); x1 = max(a.x, b.x)
+        y0 = min(a.y, b.y); y1 = max(a.y, b.y)
+    }
+
+    func contains(_ p: CGPoint) -> Bool { p.x >= x0 && p.x < x1 && p.y >= y0 && p.y < y1 }
+
+    func union(_ o: NormRect) -> NormRect {
+        NormRect(x0: min(x0, o.x0), y0: min(y0, o.y0), x1: max(x1, o.x1), y1: max(y1, o.y1))
+    }
 
     func clamped(minSize: CGFloat = 0.08) -> NormRect {
         var r = self
@@ -95,6 +153,168 @@ struct NormRect: Equatable, Codable {
         r.y1 = max(min(1, r.y1), r.y0 + minSize)
         return r
     }
+}
+
+// MARK: - Regions
+
+enum RegionMode: String, Codable, CaseIterable, Identifiable {
+    /// Up to 6 independent boxes.
+    case free
+    /// One area split into rows × columns.
+    case grid
+    var id: String { rawValue }
+}
+
+/// Analysis regions drawn by the user, plus an optional reference box (white paper / grey card).
+/// No region drawn = the whole frame is analysed.
+struct AnalysisRegions: Equatable, Codable {
+    var mode: RegionMode = .free
+    var rects: [NormRect] = []
+    var gridArea: NormRect? = nil
+    var rows: Int = 2
+    var cols: Int = 2
+    var reference: NormRect? = nil
+
+    static let maxFree = 6
+    static let maxGridCells = 16
+    static let maxGridLines = 8
+
+    /// Analysis regions in display order (numbered 1…n). Empty = whole frame.
+    var list: [NormRect] {
+        switch mode {
+        case .free:
+            return Array(rects.prefix(Self.maxFree))
+        case .grid:
+            guard let a = gridArea else { return [] }
+            let r = max(1, rows), c = max(1, cols)
+            var out: [NormRect] = []
+            for i in 0..<r {
+                for j in 0..<c {
+                    out.append(NormRect(x0: a.x0 + a.width * CGFloat(j) / CGFloat(c),
+                                        y0: a.y0 + a.height * CGFloat(i) / CGFloat(r),
+                                        x1: a.x0 + a.width * CGFloat(j + 1) / CGFloat(c),
+                                        y1: a.y0 + a.height * CGFloat(i + 1) / CGFloat(r)))
+                }
+            }
+            return out
+        }
+    }
+
+    var isEmpty: Bool { list.isEmpty }
+
+    /// Number of analysed regions (1 when the whole frame is used).
+    var regionCount: Int { max(1, list.count) }
+
+    /// Bounding box of everything analysed (whole frame when nothing is drawn).
+    var bounds: NormRect {
+        let l = list
+        guard var b = l.first else { return .full }
+        for r in l.dropFirst() { b = b.union(r) }
+        return b
+    }
+
+    /// Region colours (RGB 0…1), cycled when there are more regions than colours.
+    static let palette: [(Double, Double, Double)] = [
+        (1.00, 0.27, 0.23), (0.25, 0.55, 1.00), (0.25, 0.85, 0.35), (1.00, 0.62, 0.10),
+        (0.75, 0.40, 1.00), (0.15, 0.85, 0.90), (1.00, 0.45, 0.75), (0.80, 0.85, 0.20),
+        (0.55, 0.35, 0.20), (0.60, 0.75, 1.00), (0.10, 0.55, 0.40), (1.00, 0.85, 0.55),
+        (0.50, 0.20, 0.60), (0.40, 0.60, 0.60), (0.85, 0.20, 0.45), (0.70, 0.70, 0.70),
+    ]
+    static func color(_ i: Int) -> (Double, Double, Double) { palette[((i % palette.count) + palette.count) % palette.count] }
+}
+
+/// Pixel membership of the regions on an analysis grid.
+struct RegionMasks {
+    let width: Int
+    let height: Int
+    /// Number of regions (≥ 1; one region covering the frame when nothing is drawn).
+    let count: Int
+    let wholeFrame: Bool
+    /// Per pixel: bit k set = pixel belongs to region k. The reference box is excluded.
+    let bits: [UInt32]
+    /// Pixel indices of each region.
+    let regionIndices: [[Int32]]
+    /// Pixel indices of the reference box (empty if none).
+    let refIndices: [Int32]
+    let bounds: NormRect
+
+    init(regions: AnalysisRegions, width: Int, height: Int) {
+        self.width = width
+        self.height = height
+        let list = regions.list
+        wholeFrame = list.isEmpty
+        let rects = wholeFrame ? [NormRect.full] : list
+        count = rects.count
+        bounds = regions.bounds
+        var b = [UInt32](repeating: 0, count: width * height)
+        var idx = [[Int32]](repeating: [], count: rects.count)
+        var ref: [Int32] = []
+        let W = CGFloat(width), H = CGFloat(height)
+        for y in 0..<height {
+            let py = (CGFloat(y) + 0.5) / H
+            for x in 0..<width {
+                let p = CGPoint(x: (CGFloat(x) + 0.5) / W, y: py)
+                let i = y * width + x
+                if let r = regions.reference, r.contains(p) {
+                    ref.append(Int32(i))
+                    continue
+                }
+                var m: UInt32 = 0
+                for (k, r) in rects.enumerated() where k < 32 && r.contains(p) {
+                    m |= 1 << UInt32(k)
+                    idx[k].append(Int32(i))
+                }
+                b[i] = m
+            }
+        }
+        bits = b
+        regionIndices = idx
+        refIndices = ref
+    }
+
+    /// Mean raw R, G, B (0–255) of each region, of all regions together and of the reference box.
+    func means(bgra: UnsafePointer<UInt8>, bytesPerRow: Int)
+        -> (regions: [RGBMean], union: RGBMean, reference: RGBMean?) {
+        var regs = [RGBMean]()
+        regs.reserveCapacity(count)
+        func mean(_ list: [Int32]) -> RGBMean {
+            var sr = 0, sg = 0, sb = 0
+            for i32 in list {
+                let i = Int(i32)
+                let p = bgra + (i / width) * bytesPerRow + (i % width) * 4
+                sb += Int(p[0]); sg += Int(p[1]); sr += Int(p[2])
+            }
+            let n = Float(max(1, list.count))
+            return RGBMean(r: Float(sr) / n, g: Float(sg) / n, b: Float(sb) / n)
+        }
+        for l in regionIndices { regs.append(mean(l)) }
+        var ur = 0, ug = 0, ub = 0, un = 0
+        for i in 0..<(width * height) where bits[i] != 0 {
+            let p = bgra + (i / width) * bytesPerRow + (i % width) * 4
+            ub += Int(p[0]); ug += Int(p[1]); ur += Int(p[2]); un += 1
+        }
+        let n = Float(max(1, un))
+        let u = RGBMean(r: Float(ur) / n, g: Float(ug) / n, b: Float(ub) / n)
+        return (regs, u, refIndices.isEmpty ? nil : mean(refIndices))
+    }
+}
+
+struct RGBMean: Equatable {
+    var r: Float
+    var g: Float
+    var b: Float
+    var maxChannel: Float { max(r, g, b) }
+}
+
+/// Per-region detection result.
+struct RegionStat: Equatable {
+    var meanResponse: Float = 0
+    /// Fraction of the region's valid pixels already reached by the gas.
+    var arrivedFraction: Float = 0
+    /// Seconds after the baseline when the region counted as reached (nil = not yet).
+    var arrivalTime: Float? = nil
+    /// Raw mean colour (0–255), filled by the pipeline.
+    var raw = RGBMean(r: 0, g: 0, b: 0)
 }
 
 // MARK: - Results
@@ -150,6 +370,14 @@ struct GasFrameResult: Equatable {
     var roiMeanR: Float = 0
     var roiMeanG: Float = 0
     var roiMeanB: Float = 0
+    /// One entry per region (one for the whole frame when nothing is drawn).
+    var regions: [RegionStat] = []
+    /// Heat-map response (%) shown as the top colour.
+    var displayScale: Float = 0
+    /// Reference correction factor applied to the signal this frame (1 = none).
+    var refFactor: Float = 1
+    /// Raw mean colour of the reference box.
+    var refMean: RGBMean? = nil
 }
 
 /// Video analysis: where (in video seconds) the baseline was taken and the gas first arrived.
@@ -168,12 +396,18 @@ struct ChartSample: Equatable {
     var response: Float      // mean ΔS% in ROI (0 before a baseline exists)
     /// 0 waiting, 1 taking baseline, 2 monitoring, 3 gas detected
     var phase: UInt8
+    /// Raw mean colour of each region.
+    var regions: [RGBMean] = []
+    /// ΔS% of each region.
+    var regionResponse: [Float] = []
+    /// Raw mean colour of the reference box.
+    var ref: RGBMean? = nil
 }
 
 enum ChartMode: String, CaseIterable, Identifiable, Codable {
     case raw, response
     var id: String { rawValue }
-    var label: String { self == .raw ? "R 原始值" : "ΔR/R %" }
+    var label: String { self == .raw ? L("原始值") : "ΔS/S %" }
 }
 
 enum OverlayMode: String, CaseIterable, Identifiable, Codable {

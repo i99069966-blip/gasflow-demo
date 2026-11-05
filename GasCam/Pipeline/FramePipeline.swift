@@ -26,6 +26,8 @@ final class FramePipeline: ObservableObject {
     @Published private(set) var videoCurve: [ChartSample] = []
     /// Video pre-scan progress 0…1 (1 = done).
     @Published private(set) var scanProgress: Double = 0
+    /// Video: heat-map scale for the whole file (known after the scan and a baseline). nil = not yet.
+    @Published private(set) var videoScale: Float?
     /// Video mode: when the baseline was taken and when gas first arrived (video seconds).
     @Published private(set) var marks = VideoMarks()
     /// While the user drags the progress bar: the time under the finger.
@@ -52,14 +54,20 @@ final class FramePipeline: ObservableObject {
             Self.store(params, "gas.params")
             procLock.lock(); procParams = params; paramsDirty = true; procLock.unlock()
             updateEffectiveRate()
-            if params.channel != oldValue.channel || params.polarity != oldValue.polarity { rebuildVideoCurve() }
+            if params.channel != oldValue.channel {
+                if case .file = source { scheduleRescan() }
+            } else if params.polarity != oldValue.polarity || params.useReference != oldValue.useReference
+                        || params.autoScale != oldValue.autoScale || params.minPercent != oldValue.minPercent {
+                rebuildVideoCurve()
+            }
         }
     }
-    @Published var roi: NormRect {
+    /// Analysis regions + reference box. Empty = whole frame.
+    @Published var regions: AnalysisRegions {
         didSet {
-            guard roi != oldValue else { return }
-            Self.store(roi, "gas.roi")
-            procLock.lock(); procROI = roi; roiDirty = true; procLock.unlock()
+            guard regions != oldValue else { return }
+            Self.store(regions, "gas.regions")
+            procLock.lock(); procRegions = regions; regionsDirty = true; procLock.unlock()
             if case .file = source { scheduleRescan() }
         }
     }
@@ -91,6 +99,9 @@ final class FramePipeline: ObservableObject {
     private var fileFPS: Double = 30
     private var cancellables = Set<AnyCancellable>()
     private var scanRaw: [ChartSample] = []
+    /// Coarse per-frame signal maps of the video (for the whole-file colour scale).
+    private var scanCoarse = CoarseScan()
+    private var scaleWork: DispatchWorkItem?
     private var rescanWork: DispatchWorkItem?
     private var scrubWasPaused = false
     private var lastScrubSeek: TimeInterval = 0
@@ -104,10 +115,12 @@ final class FramePipeline: ObservableObject {
     private var overlayBuffer: UnsafeMutablePointer<UInt8>?
     private var overlayCount = 0
     private var procParams: GasParams
-    private var procROI: NormRect
+    private var procRegions: AnalysisRegions
+    private var procMasks: RegionMasks?
     private var procDisplay: DisplayOptions
     private var paramsDirty = false
-    private var roiDirty = false
+    private var regionsDirty = false
+    private var procVideoScale: Float?
     private var pendingRebaseline = false
     private var pendingResetArrivals = false
     private var armed = false
@@ -136,14 +149,14 @@ final class FramePipeline: ObservableObject {
         self.camera = camera
         self.renderer = PreviewRenderer()
         let p = FramePipeline.load("gas.params", default: GasParams())
-        let r = FramePipeline.load("gas.roi", default: NormRect.defaultROI)
+        let r = FramePipeline.load("gas.regions", default: AnalysisRegions())
         let d = FramePipeline.load("display.options", default: DisplayOptions())
         params = p
-        roi = r
+        regions = r
         display = d
         recordSettings = FramePipeline.load("record.settings", default: RecordSettings())
         procParams = p
-        procROI = r
+        procRegions = r
         procDisplay = d
         renderer?.options = d
 
@@ -170,7 +183,7 @@ final class FramePipeline: ObservableObject {
         }
         fileSource.onFinish = { [weak self] err in
             self?.playbackFinished = true
-            if let err { self?.toast = "播放结束: \(err)" }
+            if let err { self?.toast = L("播放结束") + ": \(err)" }
         }
     }
 
@@ -201,7 +214,10 @@ final class FramePipeline: ObservableObject {
             self.procLock.unlock()
         }
         if source == .camera && params.lockCameraOnBaseline && !camera.isFullyLocked {
-            camera.lockAll(completion: queue)
+            camera.lockAll { [weak self] summary in
+                if !summary.isEmpty { self?.toast = L("已锁定") + "：" + summary }
+                queue()
+            }
         } else {
             queue()
         }
@@ -226,7 +242,9 @@ final class FramePipeline: ObservableObject {
 
     /// One tap: freeze exposure, white balance, focus and torch at their current values.
     func lockAllCamera() {
-        camera.lockAll()
+        camera.lockAll { [weak self] summary in
+            if !summary.isEmpty { self?.toast = L("已锁定") + "：" + summary }
+        }
     }
 
     /// One tap: exposure, white balance, focus and torch back to automatic.
@@ -293,7 +311,14 @@ final class FramePipeline: ObservableObject {
         if let pd = try? JSONEncoder().encode(params), let pj = try? JSONSerialization.jsonObject(with: pd) {
             meta["gas_params"] = pj
         }
-        meta["roi"] = ["x0": roi.x0, "y0": roi.y0, "x1": roi.x1, "y1": roi.y1]
+        func rectDict(_ r: NormRect) -> [String: Double] {
+            ["x0": Double(r.x0), "y0": Double(r.y0), "x1": Double(r.x1), "y1": Double(r.y1)]
+        }
+        meta["region_mode"] = regions.mode.rawValue
+        meta["regions"] = regions.isEmpty ? [rectDict(.full)] : regions.list.map(rectDict)
+        if regions.mode == .grid { meta["grid_rows"] = regions.rows; meta["grid_cols"] = regions.cols }
+        if let ref = regions.reference { meta["reference"] = rectDict(ref) }
+        meta["reference_correction"] = params.useReference
         if let data = try? JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: base.appendingPathExtension("json"))
         }
@@ -301,7 +326,8 @@ final class FramePipeline: ObservableObject {
         var newLogger: AnalysisLogger?
         if recordSettings.writeCSV {
             let comment = "GasCam analysis log for \(movURL.lastPathComponent)\nt_s = seconds since recording start; coordinates normalised (0..1, origin top-left of upright frame)"
-            newLogger = AnalysisLogger(url: base.appendingPathExtension("csv"), comment: comment)
+            newLogger = AnalysisLogger(url: base.appendingPathExtension("csv"), comment: comment,
+                                       regionCount: regions.regionCount)
         }
         procLock.lock()
         logger = newLogger
@@ -334,11 +360,11 @@ final class FramePipeline: ObservableObject {
                         let bytes = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.doubleValue ?? 0
                         let mbps = duration > 0 ? bytes * 8 / duration / 1_000_000 : 0
                         let fps = duration > 0 ? Double(written) / duration : 0
-                        self.toast = "已保存 \(url.lastPathComponent)\n"
-                            + String(format: "实际码率 %.1f Mb/s · 实际帧率 %.1f fps · 丢帧 %d", mbps, fps, dropped)
+                        self.toast = L("已保存") + " \(url.lastPathComponent)\n"
+                            + String(format: L("实际码率 %.1f Mb/s · 实际帧率 %.1f fps · 丢帧 %d"), mbps, fps, dropped)
                         if toPhotos { self.saveVideoToPhotos(url) }
                     } else {
-                        self.toast = "录制失败: \(err ?? "未知错误")"
+                        self.toast = L("录制失败") + ": \(err ?? L("未知错误"))"
                     }
                 }
             }
@@ -348,17 +374,22 @@ final class FramePipeline: ObservableObject {
     private func saveVideoToPhotos(_ url: URL) {
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             guard status == .authorized || status == .limited else {
-                DispatchQueue.main.async { self.toast = "未获得相册权限，录像保存在“文件”App → GasCam" }
+                DispatchQueue.main.async { self.toast = L("未获得相册权限，录像保存在“文件”App → GasCam") }
                 return
             }
+            var localID: String?
             PHPhotoLibrary.shared().performChanges({
                 let req = PHAssetCreationRequest.forAsset()
                 let opts = PHAssetResourceCreationOptions()
                 opts.shouldMoveFile = false
+                opts.originalFilename = url.lastPathComponent
                 req.addResource(with: .video, fileURL: url, options: opts)
+                localID = req.placeholderForCreatedAsset?.localIdentifier
             }, completionHandler: { ok, error in
+                if ok, let id = localID { PhotoLinks.set(id, for: url.lastPathComponent) }
                 DispatchQueue.main.async {
-                    self.toast = ok ? "已存入相册（原文件也在“文件”App → GasCam）" : "存入相册失败: \(error?.localizedDescription ?? "")"
+                    self.toast = ok ? L("已存入相册（原文件也在“文件”App → GasCam）")
+                        : L("存入相册失败") + ": \(error?.localizedDescription ?? "")"
                 }
             })
         }
@@ -384,12 +415,15 @@ final class FramePipeline: ObservableObject {
         chartT0 = nil
         lastChartT = -1
         procMarks = VideoMarks()
+        procVideoScale = nil
         procLock.unlock()
         renderer?.clear()
         chart = []
         fileSource.cancelScan()
         scanRaw = []
+        scanCoarse = CoarseScan()
         videoCurve = []
+        videoScale = nil
         scanProgress = 0
         marks = VideoMarks()
         scrubTime = nil
@@ -467,24 +501,36 @@ final class FramePipeline: ObservableObject {
     private func startScan() {
         guard case .file = source else { return }
         scanProgress = 0
-        let roiNow = roi
+        let regs = regions
+        let channel = params.channel
         var local: [ChartSample] = []
+        var coarse = CoarseScan()
         var ds: FrameDownsampler?
+        var masks: RegionMasks?
+        var lastCoarseT = -Double.infinity
         fileSource.scan(handler: { pb, t in
             let w = CVPixelBufferGetWidth(pb), h = CVPixelBufferGetHeight(pb)
             if ds == nil {
                 let (gw, gh) = FrameDownsampler.gridSize(forFrameWidth: w, height: h)
                 ds = FrameDownsampler(width: gw, height: gh)
+                masks = RegionMasks(regions: regs, width: gw, height: gh)
+                coarse = CoarseScan(gridWidth: gw, gridHeight: gh, regions: regs, channel: channel)
             }
-            guard let d = ds, d.downsample(pb) else { return }
-            let (r, g, b) = FramePipeline.roiMean(d, roiNow)
-            local.append(ChartSample(t: t, r: r, g: g, b: b, response: 0, phase: 0))
+            guard let d = ds, let m = masks, d.downsample(pb) else { return }
+            let means = m.means(bgra: d.pixels, bytesPerRow: d.bytesPerRow)
+            local.append(ChartSample(t: t, r: means.union.r, g: means.union.g, b: means.union.b,
+                                     response: 0, phase: 0, regions: means.regions, ref: means.reference))
+            if t - lastCoarseT >= 1.0 / 15 {
+                lastCoarseT = t
+                coarse.add(d, time: t, sampleIndex: local.count - 1)
+            }
         }, progress: { [weak self] p in
             self?.scanProgress = p
         }, completion: { [weak self] ok in
             guard let self else { return }
             if ok {
                 self.scanRaw = local
+                self.scanCoarse = coarse
                 self.scanProgress = 1
                 self.rebuildVideoCurve()
             }
@@ -498,24 +544,48 @@ final class FramePipeline: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: w)
     }
 
-    /// Fill phase bands and ΔS% of the scanned curve from the current baseline / arrival marks.
+    /// Fill phase bands and ΔS% (all regions together and per region) of the scanned curve from the
+    /// current baseline / arrival marks, and work out the whole-file heat-map scale.
     private func rebuildVideoCurve() {
         guard case .file = source, !scanRaw.isEmpty else { return }
         let m = marks
         let p = params
-        func value(_ s: ChartSample) -> Float {
-            switch p.channel {
-            case .red: return s.r
-            case .green: return s.g
-            case .blue: return s.b
-            case .luma: return 0.2126 * s.r + 0.7152 * s.g + 0.0722 * s.b
-            case .redChroma: return 100 * s.r / max(s.r + s.g + s.b, 1)
+        let ch = p.channel
+        func pol(_ v: Float) -> Float {
+            switch p.polarity {
+            case .decrease: return -v
+            case .increase: return v
+            case .both: return abs(v)
             }
         }
+        // reference correction: factor = reference at baseline start / reference now
+        var refAnchor: Float?
+        if p.useReference, let b0 = m.baselineStart,
+           let first = scanRaw.first(where: { $0.t >= b0 - 1e-6 }), let rf = first.ref {
+            refAnchor = ch.value(r: rf.r, g: rf.g, b: rf.b)
+        }
+        func factor(_ s: ChartSample) -> Float {
+            guard let a = refAnchor, let rf = s.ref else { return 1 }
+            let now = ch.value(r: rf.r, g: rf.g, b: rf.b)
+            return now > 1 ? a / now : 1
+        }
+        let nReg = scanRaw.first?.regions.count ?? 0
         var ref: Float = 0
+        var regRef = [Float](repeating: 0, count: nReg)
         if let b0 = m.baselineStart, let b1 = m.baselineEnd {
             let base = scanRaw.filter { $0.t >= b0 - 1e-6 && $0.t <= b1 + 1e-6 }
-            if !base.isEmpty { ref = base.reduce(0) { $0 + value($1) } / Float(base.count) }
+            if !base.isEmpty {
+                for s in base {
+                    let f = factor(s)
+                    ref += ch.value(r: s.r, g: s.g, b: s.b) * f
+                    for k in 0..<min(nReg, s.regions.count) {
+                        let c = s.regions[k]
+                        regRef[k] += ch.value(r: c.r, g: c.g, b: c.b) * f
+                    }
+                }
+                ref /= Float(base.count)
+                for k in 0..<nReg { regRef[k] /= Float(base.count) }
+            }
         }
         videoCurve = scanRaw.map { s in
             var o = s
@@ -527,16 +597,43 @@ final class FramePipeline: ObservableObject {
                 }
             }
             if ref > 0 && o.phase >= 2 {
-                var v = 100 * (value(s) - ref) / ref
-                switch p.polarity {
-                case .decrease: v = -v
-                case .increase: break
-                case .both: v = abs(v)
+                let f = factor(s)
+                o.response = pol(100 * (ch.value(r: s.r, g: s.g, b: s.b) * f - ref) / ref)
+                o.regionResponse = (0..<min(nReg, s.regions.count)).map { k in
+                    let c = s.regions[k]
+                    let r0 = regRef[k]
+                    return r0 > 0 ? pol(100 * (ch.value(r: c.r, g: c.g, b: c.b) * f - r0) / r0) : 0
                 }
-                o.response = v
             }
             return o
         }
+        computeVideoScale()
+    }
+
+    /// One heat-map scale for the whole video: 99th-percentile response of every frame after the
+    /// baseline (coarse grid), robust maximum over time.
+    private func computeVideoScale() {
+        scaleWork?.cancel()
+        let m = marks
+        let p = params
+        let coarse = scanCoarse
+        let raw = scanRaw
+        guard p.autoScale, let b0 = m.baselineStart, let b1 = m.baselineEnd, coarse.frames > 0,
+              coarse.channel == p.channel else {
+            setVideoScale(nil)
+            return
+        }
+        let work = DispatchWorkItem { [weak self] in
+            let v = coarse.scale(baseline: b0...b1, params: p, samples: raw)
+            DispatchQueue.main.async { self?.setVideoScale(v) }
+        }
+        scaleWork = work
+        DispatchQueue.global(qos: .utility).async(execute: work)
+    }
+
+    private func setVideoScale(_ v: Float?) {
+        videoScale = v
+        procLock.lock(); procVideoScale = v; procLock.unlock()
     }
 
     /// Pause and move by `frames` frames (negative = backwards).
@@ -579,11 +676,11 @@ final class FramePipeline: ObservableObject {
     /// Saves the current frame + overlay + arrow as PNG to Documents (and Photos).
     func saveResultImage() {
         guard let renderer, let composite = renderer.currentComposite() else {
-            toast = "还没有画面"
+            toast = L("还没有画面")
             return
         }
         let r = result
-        let roiNow = roi
+        let regs = regions
         let stamp = Self.stampFormatter.string(from: Date())
         let toPhotos = recordSettings.saveToPhotos
         DispatchQueue.global(qos: .userInitiated).async {
@@ -593,11 +690,11 @@ final class FramePipeline: ObservableObject {
             fmt.scale = 1
             let image = UIGraphicsImageRenderer(size: size, format: fmt).image { ctx in
                 UIImage(cgImage: cg).draw(in: CGRect(origin: .zero, size: size))
-                ResultDrawing.draw(in: ctx.cgContext, size: size, roi: roiNow, result: r)
+                ResultDrawing.draw(in: ctx.cgContext, size: size, regions: regs, result: r)
             }
             let url = Self.documentsURL.appendingPathComponent("GasCam_result_\(stamp).png")
             if let png = image.pngData() { try? png.write(to: url) }
-            DispatchQueue.main.async { self.toast = "结果图已保存: \(url.lastPathComponent)" }
+            DispatchQueue.main.async { self.toast = L("结果图已保存") + ": \(url.lastPathComponent)" }
             if toPhotos {
                 PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
                     guard status == .authorized || status == .limited else { return }
@@ -641,20 +738,27 @@ final class FramePipeline: ObservableObject {
             frameH = h
             let (gw, gh) = FrameDownsampler.gridSize(forFrameWidth: w, height: h)
             downsampler = FrameDownsampler(width: gw, height: gh)
-            analyzer = GasAnalyzer(width: gw, height: gh, params: procParams, roi: procROI)
+            analyzer = GasAnalyzer(width: gw, height: gh, params: procParams, regions: procRegions)
+            procMasks = RegionMasks(regions: procRegions, width: gw, height: gh)
             overlayBuffer?.deallocate()
             overlayBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: gw * gh * 4)
             overlayBuffer?.initialize(repeating: 0, count: gw * gh * 4)
             overlayCount = gw * gh * 4
             paramsDirty = false
-            roiDirty = false
+            regionsDirty = false
             let aspect = CGFloat(w) / CGFloat(max(h, 1))
             DispatchQueue.main.async { self.frameAspect = aspect }
         }
-        guard let an = analyzer, let ds = downsampler else { return }
+        guard let an = analyzer, let ds = downsampler, let masks = procMasks else { return }
 
         if paramsDirty { an.update(params: procParams); paramsDirty = false }
-        if roiDirty { an.update(roi: procROI); roiDirty = false }
+        if regionsDirty {
+            an.update(regions: procRegions)
+            procMasks = RegionMasks(regions: procRegions, width: an.width, height: an.height)
+            regionsDirty = false
+        }
+        an.videoMode = !fromCamera
+        an.videoScale = procVideoScale
         an.baselineTargetFrames = procBaselineTarget
         if pendingRebaseline { an.resetBaseline(); pendingRebaseline = false }
         if pendingResetArrivals { an.resetArrivals(keepGhost: false); pendingResetArrivals = false }
@@ -684,13 +788,20 @@ final class FramePipeline: ObservableObject {
             r = an.process(bgra: ds.pixels, bytesPerRow: ds.bytesPerRow, time: t, registerArrivals: register)
         }
         if preroll { return }       // pre-roll only warms up EMA / FLOW history
-        let (mr, mg, mb) = Self.roiMean(ds, procROI)
+        let means = masks.means(bgra: ds.pixels, bytesPerRow: ds.bytesPerRow)
+        let mr = means.union.r, mg = means.union.g, mb = means.union.b
         r.roiMeanR = mr
         r.roiMeanG = mg
         r.roiMeanB = mb
+        r.refMean = means.reference
+        if r.regions.count != means.regions.count {
+            r.regions = [RegionStat](repeating: RegionStat(), count: means.regions.count)
+        }
+        for k in 0..<means.regions.count { r.regions[k].raw = means.regions[k] }
+        if r.displayScale <= 0 { r.displayScale = procParams.autoScale ? procParams.autoScaleFloor : procParams.displayMaxPercent }
 
         if fromCamera {
-            camera.autoTorchStep(roiMax: max(mr, mg, mb))
+            camera.autoExposureStep(level: means.union.maxChannel)
         } else {
             // remember when the baseline was taken / gas arrived, in video time
             var changed = false
@@ -729,7 +840,9 @@ final class FramePipeline: ObservableObject {
             case .monitoring: code = 2
             case .detected: code = 3
             }
-            chartBuf.append(ChartSample(t: tc, r: mr, g: mg, b: mb, response: r.meanResponse, phase: code))
+            chartBuf.append(ChartSample(t: tc, r: mr, g: mg, b: mb, response: r.meanResponse, phase: code,
+                                        regions: means.regions, regionResponse: r.regions.map { $0.meanResponse },
+                                        ref: means.reference))
             lastChartT = tc
             if let cut = chartBuf.firstIndex(where: { tc - $0.t <= 125 }), cut > 0 {
                 chartBuf.removeFirst(cut)
@@ -738,7 +851,8 @@ final class FramePipeline: ObservableObject {
 
         // overlay
         if armed && an.ready && procDisplay.overlay != .live, let buf = overlayBuffer {
-            an.renderOverlay(mode: procDisplay.overlay, opacity: procDisplay.overlayOpacity, into: buf)
+            an.renderOverlay(mode: procDisplay.overlay, opacity: procDisplay.overlayOpacity,
+                             scale: r.displayScale, into: buf)
             renderer?.setOverlay(Self.makeImage(buf, width: an.width, height: an.height))
         } else {
             renderer?.setOverlay(nil)
@@ -764,25 +878,6 @@ final class FramePipeline: ObservableObject {
                 self.measuredFPS = fps
             }
         }
-    }
-
-    /// Mean raw R, G, B (0–255) of the ROI on the analysis grid.
-    fileprivate static func roiMean(_ ds: FrameDownsampler, _ roi: NormRect) -> (Float, Float, Float) {
-        let x0 = max(0, min(ds.width - 1, Int(roi.x0 * CGFloat(ds.width))))
-        let x1 = max(x0 + 1, min(ds.width, Int(roi.x1 * CGFloat(ds.width))))
-        let y0 = max(0, min(ds.height - 1, Int(roi.y0 * CGFloat(ds.height))))
-        let y1 = max(y0 + 1, min(ds.height, Int(roi.y1 * CGFloat(ds.height))))
-        var sr = 0, sg = 0, sb = 0
-        let px = ds.pixels
-        for y in y0..<y1 {
-            let row = px + y * ds.bytesPerRow
-            for x in x0..<x1 {
-                let p = row + x * 4
-                sb += Int(p[0]); sg += Int(p[1]); sr += Int(p[2])
-            }
-        }
-        let n = Float(max(1, (x1 - x0) * (y1 - y0)))
-        return (Float(sr) / n, Float(sg) / n, Float(sb) / n)
     }
 
     private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
@@ -815,13 +910,33 @@ final class FramePipeline: ObservableObject {
 
 /// Draws ROI, arrow and markers into a bitmap (used for the saved result image).
 enum ResultDrawing {
-    static func draw(in ctx: CGContext, size: CGSize, roi: NormRect, result r: GasFrameResult) {
+    static func draw(in ctx: CGContext, size: CGSize, regions: AnalysisRegions, result r: GasFrameResult) {
         func pt(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x * size.width, y: p.y * size.height) }
+        func box(_ q: NormRect) -> CGRect {
+            CGRect(x: q.x0 * size.width, y: q.y0 * size.height, width: q.width * size.width, height: q.height * size.height)
+        }
         let lw = max(2, size.width / 250)
         ctx.setLineWidth(lw)
-        ctx.setStrokeColor(UIColor.white.withAlphaComponent(0.8).cgColor)
-        ctx.stroke(CGRect(x: roi.x0 * size.width, y: roi.y0 * size.height,
-                          width: roi.width * size.width, height: roi.height * size.height))
+        let font = UIFont.monospacedSystemFont(ofSize: max(14, size.width / 45), weight: .bold)
+        UIGraphicsPushContext(ctx)
+        for (k, q) in regions.list.enumerated() {
+            let c = AnalysisRegions.color(k)
+            let col = UIColor(red: c.0, green: c.1, blue: c.2, alpha: 1)
+            ctx.setStrokeColor(col.cgColor)
+            ctx.stroke(box(q))
+            ("\(k + 1)" as NSString).draw(at: CGPoint(x: q.x0 * size.width + lw * 2, y: q.y0 * size.height + lw),
+                                         withAttributes: [.font: font, .foregroundColor: col])
+        }
+        if let ref = regions.reference {
+            ctx.setStrokeColor(UIColor.white.cgColor)
+            ctx.setLineDash(phase: 0, lengths: [lw * 3, lw * 2])
+            ctx.stroke(box(ref))
+            ctx.setLineDash(phase: 0, lengths: [])
+            ("REF" as NSString).draw(at: CGPoint(x: ref.x0 * size.width + lw * 2, y: ref.y0 * size.height + lw),
+                                     withAttributes: [.font: font, .foregroundColor: UIColor.white])
+        }
+        UIGraphicsPopContext()
+        let roi = regions.bounds
         guard let s = r.source ?? r.lastSource else { return }
         let e = pt(s.earliest), c = pt(s.centroid), src = pt(s.sourcePoint)
         if s.mode == .direction {
@@ -861,5 +976,116 @@ enum ResultDrawing {
         UIGraphicsPushContext(ctx)
         (text as NSString).draw(at: CGPoint(x: 12, y: roi.y1 * size.height + 12), withAttributes: attrs)
         UIGraphicsPopContext()
+    }
+}
+
+/// Coarse (1/4 grid) per-frame signal maps of a video, used for the whole-file colour scale.
+struct CoarseScan {
+    static let block = 4
+    private(set) var width = 0
+    private(set) var height = 0
+    private(set) var channel: SignalChannel = .red
+    /// Signal × 100 per cell, frame after frame.
+    private(set) var data: [UInt16] = []
+    private(set) var times: [Double] = []
+    private(set) var sampleIndex: [Int] = []
+    /// Cells inside the analysis regions.
+    private(set) var cells: [Int32] = []
+    var frames: Int { times.count }
+
+    init() {}
+
+    init(gridWidth gw: Int, gridHeight gh: Int, regions: AnalysisRegions, channel: SignalChannel) {
+        width = max(1, gw / Self.block)
+        height = max(1, gh / Self.block)
+        self.channel = channel
+        let m = RegionMasks(regions: regions, width: width, height: height)
+        cells = (0..<(width * height)).filter { m.bits[$0] != 0 }.map { Int32($0) }
+    }
+
+    mutating func add(_ ds: FrameDownsampler, time: Double, sampleIndex idx: Int) {
+        guard width > 0 else { return }
+        let px = ds.pixels
+        let b = Self.block
+        let inv = 1 / Float(b * b)
+        for cy in 0..<height {
+            for cx in 0..<width {
+                var sum: Float = 0
+                for y in (cy * b)..<min(ds.height, cy * b + b) {
+                    let row = px + y * ds.bytesPerRow
+                    for x in (cx * b)..<min(ds.width, cx * b + b) {
+                        let p = row + x * 4
+                        sum += channel.value(r: Float(p[2]), g: Float(p[1]), b: Float(p[0]))
+                    }
+                }
+                data.append(UInt16(max(0, min(65535, sum * inv * 100))))
+            }
+        }
+        times.append(time)
+        sampleIndex.append(idx)
+    }
+
+    /// Robust maximum (over time) of the 99th-percentile response, × 1.1, never below the floor.
+    func scale(baseline: ClosedRange<Double>, params p: GasParams, samples: [ChartSample]) -> Float? {
+        let n = width * height
+        guard n > 0, !cells.isEmpty else { return nil }
+        func refValue(_ f: Int) -> Float? {
+            guard p.useReference, sampleIndex[f] < samples.count, let rf = samples[sampleIndex[f]].ref else { return nil }
+            return channel.value(r: rf.r, g: rf.g, b: rf.b)
+        }
+        var anchor: Float?
+        var mean = [Float](repeating: 0, count: n)
+        var nb: Float = 0
+        for f in 0..<frames where baseline.contains(times[f]) {
+            let rv = refValue(f)
+            if anchor == nil { anchor = rv }
+            let k = (anchor != nil && (rv ?? 0) > 1) ? anchor! / rv! : 1
+            let base = f * n
+            for c in cells { mean[Int(c)] += Float(data[base + Int(c)]) * k }
+            nb += 1
+        }
+        guard nb > 0 else { return nil }
+        for c in cells { mean[Int(c)] /= nb }
+        var perFrame: [Float] = []
+        var vals = [Float](repeating: 0, count: cells.count)
+        for f in 0..<frames where times[f] > baseline.upperBound {
+            let rv = refValue(f)
+            let k = (anchor != nil && (rv ?? 0) > 1) ? anchor! / rv! : 1
+            let base = f * n
+            var m = 0
+            for c in cells {
+                let mu = mean[Int(c)]
+                guard mu > 500 else { continue }          // signal > 5 (dark / invalid cells skipped)
+                var v = 100 * (Float(data[base + Int(c)]) * k - mu) / mu
+                switch p.polarity {
+                case .decrease: v = -v
+                case .increase: break
+                case .both: v = abs(v)
+                }
+                vals[m] = v
+                m += 1
+            }
+            guard m > 0 else { continue }
+            var slice = Array(vals[0..<m])
+            slice.sort()
+            perFrame.append(slice[min(m - 1, Int(Float(m) * 0.99))])
+        }
+        guard !perFrame.isEmpty else { return nil }
+        perFrame.sort()
+        let robust = perFrame[min(perFrame.count - 1, Int(Float(perFrame.count) * 0.995))]
+        return max(p.autoScaleFloor, robust * 1.1)
+    }
+}
+
+/// Recording file name → Photos asset (so a rename can replace the Photos copy).
+enum PhotoLinks {
+    private static let key = "photos.links"
+    static func id(for name: String) -> String? {
+        (UserDefaults.standard.dictionary(forKey: key) as? [String: String])?[name]
+    }
+    static func set(_ id: String?, for name: String) {
+        var d = (UserDefaults.standard.dictionary(forKey: key) as? [String: String]) ?? [:]
+        d[name] = id
+        UserDefaults.standard.set(d, forKey: key)
     }
 }

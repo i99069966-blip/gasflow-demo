@@ -13,7 +13,7 @@ struct PreviewArea: View {
                 if let r = pipeline.renderer {
                     MetalPreviewView(renderer: r)
                 } else {
-                    Color.black.overlay(Text("Metal 不可用").foregroundStyle(.gray))
+                    Color.black.overlay(Text(L("Metal 不可用")).foregroundStyle(.gray))
                 }
                 PreviewOverlay(size: size, editROI: $editROI)
             }
@@ -51,7 +51,7 @@ struct PreviewOverlay: View {
                 .onTapGesture(coordinateSpace: .local) { p in
                     guard !editROI, pipeline.source == .camera else { return }
                     let n = CGPoint(x: p.x / size.width, y: p.y / size.height)
-                    camera.focusAndExpose(at: n)
+                    camera.focus(at: n)
                     focusMark = p
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { focusMark = nil }
                 }
@@ -59,7 +59,7 @@ struct PreviewOverlay: View {
             if opt.grid { GridLines().stroke(Color.white.opacity(0.35), lineWidth: 0.5) }
             if opt.crosshair { Crosshair().stroke(Color.white.opacity(0.8), lineWidth: 1) }
 
-            ROIEditor(roi: $pipeline.roi, size: size, editing: editROI)
+            RegionOverlay(size: size, editing: editROI)
 
             if opt.showHotspot, let h = r.hotspot, r.phase == .detected {
                 Image(systemName: "plus")
@@ -86,11 +86,31 @@ struct PreviewOverlay: View {
                     .position(f)
             }
 
+            VStack(alignment: .leading, spacing: 4) {
+                if opt.showColorBar && opt.overlay != .live && pipeline.result.phase != .waiting {
+                    ColorBarView(mode: opt.overlay, scale: r.displayScale,
+                                 flowScale: pipeline.params.flowScalePercent, arrivalSpan: pipeline.params.arrivalSpan)
+                }
+                if pipeline.regions.isEmpty && !editROI {
+                    Text(L("请先画框（点 ROI）· 现在按整个画面分析"))
+                        .font(Theme.mono(10, .semibold))
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(Color.black.opacity(0.6))
+                        .foregroundStyle(Theme.accent)
+                        .clipShape(Capsule())
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.leading, 6)
+            .padding(.top, 6)
+            .padding(.trailing, 52)
+            .allowsHitTesting(false)
+
             if r.phase == .waiting && pipeline.source == .camera && !editROI {
-                VStack(spacing: 4) {
-                    Text("① 对准基板，调好曝光 / 白平衡 / 对焦")
-                    Text("② 点 ROI 框选基板区域")
-                    Text("③ 点 BASELINE 锁定相机并取基线，然后通气")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L("① 按 AUTO，点画面对焦，画面合适后按 LOCK"))
+                    Text(L("② 点 ROI 画分析框（可多个，也可画参考框）"))
+                    Text(L("③ 点 BASELINE 取基线，然后通气"))
                 }
                 .font(Theme.mono(11))
                 .padding(8)
@@ -168,95 +188,6 @@ struct ArrowShape: Shape {
     }
 }
 
-// MARK: - ROI editor
-
-struct ROIEditor: View {
-    @Binding var roi: NormRect
-    let size: CGSize
-    let editing: Bool
-    @State private var draft: NormRect?
-    @State private var moveStart: NormRect?
-
-    var body: some View {
-        let cur = draft ?? roi
-        let rect = CGRect(x: cur.x0 * size.width, y: cur.y0 * size.height,
-                          width: cur.width * size.width, height: cur.height * size.height)
-        ZStack {
-            Path(rect)
-                .stroke(editing ? Theme.accent : Color.white.opacity(0.7),
-                        style: StrokeStyle(lineWidth: editing ? 2 : 1, dash: editing ? [] : [6, 4]))
-                .allowsHitTesting(false)
-            if editing {
-                Rectangle()
-                    .fill(Theme.accent.opacity(0.10))
-                    .frame(width: rect.width, height: rect.height)
-                    .position(x: rect.midX, y: rect.midY)
-                    .gesture(
-                        DragGesture()
-                            .onChanged { v in
-                                let start = moveStart ?? cur
-                                if moveStart == nil { moveStart = cur }
-                                var n = start
-                                var dx = v.translation.width / size.width
-                                var dy = v.translation.height / size.height
-                                dx = min(max(dx, -start.x0), 1 - start.x1)
-                                dy = min(max(dy, -start.y0), 1 - start.y1)
-                                n.x0 += dx; n.x1 += dx; n.y0 += dy; n.y1 += dy
-                                draft = n
-                            }
-                            .onEnded { _ in commit() }
-                    )
-                ForEach(0..<4, id: \.self) { corner in
-                    Circle()
-                        .fill(Theme.accent)
-                        .frame(width: 24, height: 24)
-                        .overlay(Circle().stroke(Color.black, lineWidth: 1))
-                        .position(cornerPoint(corner, rect))
-                        .gesture(
-                            DragGesture(coordinateSpace: .named("preview"))
-                                .onChanged { v in
-                                    var n = draft ?? roi
-                                    let x = min(max(v.location.x / size.width, 0), 1)
-                                    let y = min(max(v.location.y / size.height, 0), 1)
-                                    switch corner {
-                                    case 0: n.x0 = min(x, n.x1 - 0.08); n.y0 = min(y, n.y1 - 0.08)
-                                    case 1: n.x1 = max(x, n.x0 + 0.08); n.y0 = min(y, n.y1 - 0.08)
-                                    case 2: n.x1 = max(x, n.x0 + 0.08); n.y1 = max(y, n.y0 + 0.08)
-                                    default: n.x0 = min(x, n.x1 - 0.08); n.y1 = max(y, n.y0 + 0.08)
-                                    }
-                                    draft = n
-                                }
-                                .onEnded { _ in commit() }
-                        )
-                }
-                Text("拖动框或四角调整 ROI，再点 ROI 结束")
-                    .font(Theme.mono(10))
-                    .padding(4)
-                    .background(Color.black.opacity(0.6))
-                    .position(x: size.width / 2, y: min(size.height - 14, rect.maxY + 14))
-                    .allowsHitTesting(false)
-            }
-        }
-        .frame(width: size.width, height: size.height)
-        .coordinateSpace(.named("preview"))
-    }
-
-    private func cornerPoint(_ i: Int, _ r: CGRect) -> CGPoint {
-        switch i {
-        case 0: return CGPoint(x: r.minX, y: r.minY)
-        case 1: return CGPoint(x: r.maxX, y: r.minY)
-        case 2: return CGPoint(x: r.maxX, y: r.maxY)
-        default: return CGPoint(x: r.minX, y: r.maxY)
-        }
-    }
-
-    private func commit() {
-        if let d = draft { roi = d.clamped() }
-        draft = nil
-        moveStart = nil
-    }
-}
-
 // MARK: - Assists
 
 struct GridLines: Shape {
@@ -317,7 +248,7 @@ struct LevelIndicator: View {
                 Circle().stroke(Color.white.opacity(0.4), lineWidth: 1).frame(width: 10, height: 10)
                 Circle().fill(ok ? Color.green : Theme.accent).frame(width: 12, height: 12).offset(x: dx, y: dy)
             }
-            Text(level.faceDown ? String(format: "X %+.1f°  Y %+.1f°", level.tiltX, level.tiltY) : "请将手机镜头朝下放置")
+            Text(level.faceDown ? String(format: "X %+.1f°  Y %+.1f°", level.tiltX, level.tiltY) : L("请将手机镜头朝下放置"))
                 .font(Theme.mono(10, .semibold))
                 .padding(3)
                 .background(Color.black.opacity(0.6))

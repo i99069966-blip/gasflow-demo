@@ -8,7 +8,8 @@ import CoreGraphics
 ///   1. signal S = chosen channel, box-blurred twice
 ///   2. baseline: per-pixel mean μ and noise σ over N frames (Welford)
 ///   3. response  ΔS% = polarity · 100 · (S − μ) / μ, temporal EMA
-///   4. active    ΔS% > max(minPercent, kσ · σ/μ·100) inside ROI and not saturated
+///   0. (optional) S is multiplied by refAnchor/refNow of the reference box (white paper / grey card)
+///   4. active    ΔS% > max(minPercent, kσ · σ/μ·100) inside the regions and not saturated
 ///   5. arrival   time of the first confirmed activation of each pixel (arrival-time map)
 ///   6. source    E = centroid of the earliest 5 % arrivals, C = centroid of all arrivals,
 ///                direction = (E − C)/|E − C|, ray from E to the ROI edge = upstream source point.
@@ -20,7 +21,8 @@ final class GasAnalyzer {
     let count: Int
 
     private(set) var params: GasParams
-    private(set) var roi: NormRect
+    private(set) var regions: AnalysisRegions
+    private(set) var masks: RegionMasks
 
     // Per-pixel buffers
     private let sig: UnsafeMutablePointer<Float>
@@ -64,12 +66,31 @@ final class GasAnalyzer {
     private(set) var lastSource: GasSource?
     private var hasLastArrival = false
 
-    init(width: Int, height: Int, params: GasParams, roi: NormRect) {
+    // Regions
+    private var regionValid: [Int] = []
+    private var regionArrived: [Int] = []
+    private var regionArrivalT: [Float?] = []
+    private var regionSum: [Float] = []
+
+    // Reference correction
+    private var refAnchor: Float?
+    private var refFactor: Float = 1
+
+    // Colour scale
+    /// Video mode: one scale for the whole file (set by the pipeline once known). nil = max-hold.
+    var videoScale: Float?
+    var videoMode = false
+    private var scaleState: Float = 0
+    private var scaleTime: Double?
+    private var pctHist = [Int32](repeating: 0, count: 2001)
+
+    init(width: Int, height: Int, params: GasParams, regions: AnalysisRegions) {
         self.width = width
         self.height = height
         self.count = width * height
         self.params = params
-        self.roi = roi
+        self.regions = regions
+        self.masks = RegionMasks(regions: regions, width: width, height: height)
         func f() -> UnsafeMutablePointer<Float> {
             let p = UnsafeMutablePointer<Float>.allocate(capacity: width * height)
             p.initialize(repeating: 0, count: width * height)
@@ -109,13 +130,32 @@ final class GasAnalyzer {
         }
     }
 
-    func update(roi newROI: NormRect) {
-        guard newROI != roi else { return }
-        roi = newROI
-        if ready {
+    func update(regions newRegions: AnalysisRegions) {
+        guard newRegions != regions else { return }
+        let refChanged = newRegions.reference != regions.reference
+        regions = newRegions
+        masks = RegionMasks(regions: newRegions, width: width, height: height)
+        if refChanged && params.useReference {
+            resetBaseline()
+        } else if ready {
             computeValidMask()
             resetArrivals(keepGhost: false)
+        } else {
+            resetRegionStats()
         }
+    }
+
+    private func resetRegionStats() {
+        let n = masks.count
+        regionArrived = [Int](repeating: 0, count: n)
+        regionArrivalT = [Float?](repeating: nil, count: n)
+        regionSum = [Float](repeating: 0, count: n)
+        if regionValid.count != n { regionValid = [Int](repeating: 0, count: n) }
+    }
+
+    private func resetScale() {
+        scaleState = params.autoScaleFloor
+        scaleTime = nil
     }
 
     /// Start collecting a new reference image.
@@ -130,6 +170,9 @@ final class GasAnalyzer {
         resp.update(repeating: 0, count: count)
         lastSource = nil
         hasLastArrival = false
+        refAnchor = nil
+        refFactor = 1
+        resetScale()
         clearHistory()
         resetArrivals(keepGhost: false)
     }
@@ -194,6 +237,7 @@ final class GasAnalyzer {
         firstArrival = nil
         quietSince = nil
         currentSource = nil
+        resetRegionStats()
     }
 
     // MARK: - Per frame
@@ -203,6 +247,7 @@ final class GasAnalyzer {
     func process(bgra: UnsafePointer<UInt8>, bytesPerRow: Int, time: Double,
                  registerArrivals: Bool = true) -> GasFrameResult {
         extractSignal(bgra: bgra, bytesPerRow: bytesPerRow)
+        applyReference()
         let r = max(0, params.blurRadius)
         if r > 0 {
             boxBlur(sig, r)
@@ -211,6 +256,7 @@ final class GasAnalyzer {
 
         var result = GasFrameResult()
         result.time = time
+        result.refFactor = refFactor
 
         if !ready {
             if let s = baselineStart, time < s {      // time went backwards (video seek): start over
@@ -228,6 +274,7 @@ final class GasAnalyzer {
                 result.phase = .baseline(progress: Float(nBaseline) / Float(target))
             }
             result.validPixels = validCount
+            result.regions = [RegionStat](repeating: RegionStat(), count: masks.count)
             return result
         }
 
@@ -241,6 +288,10 @@ final class GasAnalyzer {
         var maxV: Float = -Float.greatestFiniteMagnitude
         var maxIdx = -1
         var activeN = 0
+        let nReg = masks.count
+        let regionNeed = (0..<nReg).map { k in max(1, Int((params.regionArrivalFraction * Float(regionValid[k])).rounded(.up))) }
+        for k in 0..<nReg { regionSum[k] = 0 }
+        let maskBits = masks.bits
 
         for i in 0..<count {
             if valid[i] == 0 {
@@ -257,6 +308,12 @@ final class GasAnalyzer {
             let e = a * v + b * resp[i]
             resp[i] = e
             sum += e
+            let bits = maskBits[i]
+            var m = bits
+            while m != 0 {
+                regionSum[m.trailingZeroBitCount] += e
+                m &= m - 1
+            }
             if e > maxV { maxV = e; maxIdx = i }
             if e > thr[i] {
                 activeN += 1
@@ -268,6 +325,13 @@ final class GasAnalyzer {
                     sumX += Double(i % width) + 0.5
                     sumY += Double(i / width) + 0.5
                     if firstArrival == nil { firstArrival = Double(t) }
+                    var m = bits
+                    while m != 0 {
+                        let k = m.trailingZeroBitCount
+                        regionArrived[k] += 1
+                        if regionArrivalT[k] == nil && regionArrived[k] >= regionNeed[k] { regionArrivalT[k] = t }
+                        m &= m - 1
+                    }
                 }
             } else {
                 if registerArrivals { run[i] = 0 }
@@ -287,6 +351,17 @@ final class GasAnalyzer {
             result.hotspot = CGPoint(x: (Double(maxIdx % width) + 0.5) / Double(width),
                                      y: (Double(maxIdx / width) + 0.5) / Double(height))
         }
+
+        var stats = [RegionStat]()
+        stats.reserveCapacity(nReg)
+        for k in 0..<nReg {
+            let n = max(1, regionValid[k])
+            stats.append(RegionStat(meanResponse: regionSum[k] / Float(n),
+                                    arrivedFraction: Float(regionArrived[k]) / Float(n),
+                                    arrivalTime: regionArrivalT[k]))
+        }
+        result.regions = stats
+        result.displayScale = updateScale(time: time)
 
         currentSource = estimateSource()
 
@@ -344,8 +419,9 @@ final class GasAnalyzer {
         var sx = ex, sy = ey
         if mode == .direction {
             // Extend the ray E + s·d to the ROI boundary.
-            let bx0 = Double(roi.x0) * Double(width), bx1 = Double(roi.x1) * Double(width)
-            let by0 = Double(roi.y0) * Double(height), by1 = Double(roi.y1) * Double(height)
+            let bb = masks.bounds
+            let bx0 = Double(bb.x0) * Double(width), bx1 = Double(bb.x1) * Double(width)
+            let by0 = Double(bb.y0) * Double(height), by1 = Double(bb.y1) * Double(height)
             var hits: [Double] = []
             if dx > 1e-9 { hits.append((bx1 - ex) / dx) } else if dx < -1e-9 { hits.append((bx0 - ex) / dx) }
             if dy > 1e-9 { hits.append((by1 - ey) / dy) } else if dy < -1e-9 { hits.append((by0 - ey) / dy) }
@@ -415,21 +491,81 @@ final class GasAnalyzer {
     }
 
     private func computeValidMask() {
-        let x0 = Double(roi.x0) * Double(width), x1 = Double(roi.x1) * Double(width)
-        let y0 = Double(roi.y0) * Double(height), y1 = Double(roi.y1) * Double(height)
         var c = 0
-        for y in 0..<height {
-            let fy = Double(y)
-            let inY = fy >= y0 && fy < y1
-            for x in 0..<width {
-                let i = y * width + x
-                let fx = Double(x)
-                let ok = inY && fx >= x0 && fx < x1 && saturationOK[i] != 0
-                valid[i] = ok ? 1 : 0
-                if ok { c += 1 }
+        var perRegion = [Int](repeating: 0, count: masks.count)
+        for i in 0..<count {
+            let bits = masks.bits[i]
+            let ok = bits != 0 && saturationOK[i] != 0
+            valid[i] = ok ? 1 : 0
+            if ok {
+                c += 1
+                var m = bits
+                while m != 0 {
+                    perRegion[m.trailingZeroBitCount] += 1
+                    m &= m - 1
+                }
             }
         }
         validCount = c
+        regionValid = perRegion
+    }
+
+    // MARK: - Reference correction
+
+    /// Scale the signal so that the reference box keeps the brightness it had when the baseline started.
+    private func applyReference() {
+        refFactor = 1
+        guard params.useReference, !masks.refIndices.isEmpty else { return }
+        var s: Float = 0
+        for i in masks.refIndices { s += sig[Int(i)] }
+        let now = s / Float(masks.refIndices.count)
+        guard now > 1 else { return }
+        if refAnchor == nil { refAnchor = now }
+        guard let anchor = refAnchor else { return }
+        let f = anchor / now
+        refFactor = f
+        for i in 0..<count { sig[i] *= f }
+    }
+
+    // MARK: - Colour scale
+
+    /// 99th percentile of the response over the valid pixels (0.05 % bins).
+    private func responsePercentile(_ q: Float) -> Float {
+        let nb = pctHist.count - 1
+        for k in 0..<pctHist.count { pctHist[k] = 0 }
+        var n: Int32 = 0
+        for i in 0..<count where valid[i] != 0 {
+            let v = resp[i]
+            let bin = v <= 0 ? 0 : min(nb, Int(v * 20))
+            pctHist[bin] += 1
+            n += 1
+        }
+        guard n > 0 else { return 0 }
+        let need = Int32(Float(n) * q)
+        var acc: Int32 = 0
+        for k in 0...nb {
+            acc += pctHist[k]
+            if acc >= need { return Float(k) / 20 }
+        }
+        return Float(nb) / 20
+    }
+
+    private func updateScale(time: Double) -> Float {
+        guard params.autoScale else { return params.displayMaxPercent }
+        let floor = params.autoScaleFloor
+        let target = max(floor, responsePercentile(0.99) * 1.1)
+        if videoMode {
+            if let v = videoScale { return max(floor, v) }
+            scaleState = max(scaleState, target)          // until the whole-file scale is known
+            return scaleState
+        }
+        let dt = scaleTime.map { max(0, min(1, time - $0)) } ?? 1
+        scaleTime = time
+        // rise in ~0.7 s, fall in ~6 s: follows a new plume quickly but never flickers
+        let tau = target > scaleState ? 0.7 : 6.0
+        let k = Float(1 - exp(-dt / tau))
+        scaleState = max(floor, scaleState + (target - scaleState) * k)
+        return scaleState
     }
 
     // MARK: - Signal
@@ -482,7 +618,7 @@ final class GasAnalyzer {
     // MARK: - Overlay rendering
 
     /// Fills `rgba` (width×height, premultiplied RGBA8) with the heat or arrival map.
-    func renderOverlay(mode: OverlayMode, opacity: Float, into rgba: UnsafeMutablePointer<UInt8>) {
+    func renderOverlay(mode: OverlayMode, opacity: Float, scale: Float, into rgba: UnsafeMutablePointer<UInt8>) {
         let lut = Colormap.turbo
         let op = max(0, min(1, opacity))
         switch mode {
@@ -514,19 +650,16 @@ final class GasAnalyzer {
                 rgba[o + 3] = UInt8(255 * a)
             }
         case .heat:
-            let scale = 1 / max(params.displayMaxPercent, 0.1)
+            let invScale = 1 / max(scale, 0.1)
             for i in 0..<count {
                 let o = i * 4
                 guard ready, valid[i] != 0 else {
                     rgba[o] = 0; rgba[o + 1] = 0; rgba[o + 2] = 0; rgba[o + 3] = 0
                     continue
                 }
-                let v = max(0, min(1, resp[i] * scale))
-                // Fade in between ½·threshold and 1½·threshold so sub-threshold noise
-                // (light flicker, sensor noise) never shimmers on the preview.
-                let th = max(thr[i], 1e-3)
-                let fade = max(0, min(1, (resp[i] - 0.5 * th) / th))
-                let alpha = min(1, v * 1.4) * fade * op
+                let v = max(0, min(1, resp[i] * invScale))
+                // small values stay transparent; the scale floor keeps noise down there
+                let alpha = max(0, min(1, (v - 0.08) / 0.2)) * op
                 let li = Int(v * 255) * 3
                 rgba[o] = UInt8(Float(lut[li]) * alpha)
                 rgba[o + 1] = UInt8(Float(lut[li + 1]) * alpha)

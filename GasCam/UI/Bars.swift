@@ -15,7 +15,7 @@ struct GasStatusBar: View {
                         Image(systemName: "location.north.fill")
                             .rotationEffect(.degrees(90 - s.angleDeg))
                             .foregroundStyle(r.source == nil ? Color.gray : Color.white)
-                        Text(s.mode == .direction ? String(format: "%.0f°", s.angleDeg) : "正上方")
+                        Text(s.mode == .direction ? String(format: "%.0f°", s.angleDeg) : L("正上方"))
                         Text(String(format: "c%.2f", s.confidence)).foregroundStyle(.gray)
                     }
                     .font(Theme.mono(13, .semibold))
@@ -42,6 +42,9 @@ struct GasStatusBar: View {
                         .clipShape(Capsule())
                 }
             }
+            if r.regions.count > 1, !regionArrivalRanks(r.regions).isEmpty {
+                arrivalRow(r.regions)
+            }
             HStack(spacing: 8) {
                 Picker("", selection: $pipeline.display.overlay) {
                     ForEach(OverlayMode.allCases) { m in Text(m.label).tag(m) }
@@ -63,14 +66,33 @@ struct GasStatusBar: View {
         .padding(.horizontal, 6)
     }
 
+    /// Regions in the order the gas reached them, with times relative to the first one.
+    private func arrivalRow(_ stats: [RegionStat]) -> some View {
+        let order = stats.enumerated().compactMap { k, s in s.arrivalTime.map { (k, $0) } }.sorted { $0.1 < $1.1 }
+        let t0 = order.first?.1 ?? 0
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                Text(L("到达顺序")).foregroundStyle(.gray)
+                ForEach(order.indices, id: \.self) { i in
+                    let (k, t) = order[i]
+                    if i > 0 { Text("→").foregroundStyle(.gray) }
+                    Text(i == 0 ? "\(k + 1)" : String(format: "%d(+%.2fs)", k + 1, t - t0))
+                        .foregroundStyle(AnalysisRegions.swiftColor(k))
+                }
+            }
+            .font(Theme.mono(11, .semibold))
+        }
+    }
+
     private func phasePill(_ r: GasFrameResult) -> some View {
         let (text, color): (String, Color) = {
             switch r.phase {
-            case .waiting: return ("待机", .gray)
+            case .waiting: return (L("待机"), .gray)
             case .baseline(let p):
-                return (r.baselineTarget > 0 ? "基线 \(r.baselineFrames)/\(r.baselineTarget)帧" : "基线 \(Int(p * 100))%", .blue)
-            case .monitoring: return ("监测中", .green)
-            case .detected: return ("检测到气体", .red)
+                return (r.baselineTarget > 0 ? String(format: L("基线 %d/%d帧"), r.baselineFrames, r.baselineTarget)
+                                             : String(format: L("基线 %d%%"), Int(p * 100)), .blue)
+            case .monitoring: return (L("监测中"), .green)
+            case .detected: return (L("检测到气体"), .red)
             }
         }()
         return HStack(spacing: 5) {
@@ -131,7 +153,8 @@ struct CameraBottomBar: View {
 
     private var lensLabel: String {
         guard let l = camera.lenses.first(where: { $0.id == camera.currentLensID }) else { return "LENS" }
-        if l.label == "FRONT" || camera.zoomFactor <= 1.001 { return l.label }
+        if l.label == "FRONT" { return L("前置") }
+        if camera.zoomFactor <= 1.001 { return l.label }
         return String(format: "%.1fx", camera.effectiveZoom)
     }
 
@@ -269,7 +292,10 @@ struct AudioMeterView: View {
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.2), lineWidth: 0.5))
         .overlay(alignment: .top) {
-            Text("dB").font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundStyle(.gray).offset(y: -9)
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.gray)
+                .offset(y: -11)
         }
     }
 }

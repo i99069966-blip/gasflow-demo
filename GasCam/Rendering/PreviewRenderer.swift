@@ -24,10 +24,33 @@ struct DisplayOptions: Equatable, Codable {
     /// Live R curve panel.
     var showChart = true
     var chartMode: ChartMode = .raw
+    /// Visible seconds of the live curve (0 = everything).
     var chartWindow: Double = 30
+    /// Visible seconds of a video's curve (0 = the whole video).
+    var videoChartWindow: Double = 0
     var chartShowGB = false
     /// Microphone level meter (声源显示), Blackmagic style.
     var showAudioMeter = true
+    /// Colour bar with the current scale on the preview.
+    var showColorBar = true
+}
+
+extension DisplayOptions {
+    /// Tolerant decoding: options saved by an older version keep their values.
+    init(from decoder: Decoder) throws {
+        self.init()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func get<T: Decodable>(_ k: CodingKeys, _ v: inout T) {
+            if let x = try? c.decodeIfPresent(T.self, forKey: k) { v = x }
+        }
+        get(.overlay, &overlay); get(.overlayOpacity, &overlayOpacity); get(.falseColor, &falseColor)
+        get(.zebra, &zebra); get(.zebraLevel, &zebraLevel); get(.peaking, &peaking)
+        get(.peakingThreshold, &peakingThreshold); get(.grid, &grid); get(.crosshair, &crosshair)
+        get(.level, &level); get(.showHistogram, &showHistogram); get(.showArrow, &showArrow)
+        get(.showHotspot, &showHotspot); get(.showChart, &showChart); get(.chartMode, &chartMode)
+        get(.chartWindow, &chartWindow); get(.videoChartWindow, &videoChartWindow)
+        get(.chartShowGB, &chartShowGB); get(.showAudioMeter, &showAudioMeter); get(.showColorBar, &showColorBar)
+    }
 }
 
 /// Core Image → Metal preview. Camera frames and the analysis overlay arrive from the frame

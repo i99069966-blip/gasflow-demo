@@ -75,7 +75,7 @@ final class VideoFileSource {
                 let asset = AVURLAsset(url: url)
                 let tracks = try await asset.loadTracks(withMediaType: .video)
                 guard let track = tracks.first else {
-                    throw NSError(domain: "GasCam", code: 1, userInfo: [NSLocalizedDescriptionKey: "文件中没有视频轨道"])
+                    throw NSError(domain: "GasCam", code: 1, userInfo: [NSLocalizedDescriptionKey: L("文件中没有视频轨道")])
                 }
                 let (size, transform, fps) = try await track.load(.naturalSize, .preferredTransform, .nominalFrameRate)
                 let duration = try await asset.load(.duration)
@@ -198,7 +198,7 @@ final class VideoFileSource {
         let start = min(max(0, startSeconds), lastFrame)
         let displayFrom = min(max(start, displaySeconds), lastFrame) - 0.5 / rate
         guard let pair = makeReader(l, from: start) else {
-            DispatchQueue.main.async { self.onFinish?("无法读取该视频") }
+            DispatchQueue.main.async { self.onFinish?(L("无法读取该视频")) }
             return
         }
         let (reader, output) = pair
@@ -246,7 +246,7 @@ final class VideoFileSource {
                 DispatchQueue.main.async { self.onProgress?(ts, total) }
             }
         }
-        let failed = reader.status == .failed ? (reader.error?.localizedDescription ?? "读取失败") : nil
+        let failed = reader.status == .failed ? (reader.error?.localizedDescription ?? L("读取失败")) : nil
         reader.cancelReading()
         if isCurrent(gen) {
             DispatchQueue.main.async {

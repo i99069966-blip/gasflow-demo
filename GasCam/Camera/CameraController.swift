@@ -28,16 +28,18 @@ final class CameraController: NSObject, ObservableObject {
     private let audioOutput = AVCaptureAudioDataOutput()
     private var audioInput: AVCaptureDeviceInput?
     private var lastMeterPublish: Double = 0
-    private var lastAutoTorch: Double = 0
-    /// Read on the video queue to skip work when the auto torch is off.
-    private var torchAutoActive = false
+    private var lastAutoStep: Double = 0
+    /// Read on the video queue to skip work when nothing is automatic.
+    private var autoLoopActive = false
     /// Main thread: a user-initiated change that alters the image (analysis must re-baseline).
     var onSettingsChanged: (() -> Void)?
 
     private struct Desired {
         var resolution: VideoResolution = .hd1080
         var fps: Double = 30
+        /// ISO (and the shutter while `shutterAuto`) follow the brightness of the analysis regions.
         var exposureAuto = true
+        var shutterAuto = true
         var iso: Float = 100
         var shutter: Double = 1.0 / 60
         var bias: Float = 0
@@ -64,6 +66,8 @@ final class CameraController: NSObject, ObservableObject {
     @Published var supportedFrameRates: [Double] = [30]
 
     @Published var exposureAuto = true
+    /// The shutter is chosen by AUTO (false after the user picks a shutter by hand).
+    @Published var shutterAuto = true
     @Published var iso: Float = 100
     @Published var isoRange: ClosedRange<Float> = 25...3200
     @Published var shutter: Double = 1.0 / 60
@@ -104,6 +108,20 @@ final class CameraController: NSObject, ObservableObject {
 
     /// Torch brightness follows the scene until the camera is locked (BASELINE / LOCK).
     @Published var torchAuto = false
+    /// Mains frequency of the room lights (lights flicker at twice this).
+    @Published var mainsHz: Double = 60 {
+        didSet { UserDefaults.standard.set(mainsHz, forKey: "cam.mainsHz") }
+    }
+    /// LOCK moves an automatic shutter to the nearest flicker-free value (ISO keeps the brightness).
+    @Published var fixShutterOnLock = true {
+        didSet { UserDefaults.standard.set(fixShutterOnLock, forKey: "cam.fixShutterOnLock") }
+    }
+    /// Values frozen by the last LOCK, e.g. "ISO 100 · 1/120 · 闪光 45% · 5200K".
+    @Published var lockSummary: String?
+    /// Brightness the AUTO loop aims for: brightest channel of the regions, 0–255.
+    static let autoTarget: Float = 0.70 * 255
+    /// Upper limit of the torch while it is automatic.
+    static let autoTorchCap: Float = 0.70
     /// Microphone level (dBFS, −160…0) for the 声源 meter.
     @Published var audioLevel: Float = -160
     @Published var audioPeak: Float = -160
@@ -111,7 +129,7 @@ final class CameraController: NSObject, ObservableObject {
     @Published var audioActive = false
 
     var shutterAngle: Double { 360 * shutter * frameRate }
-    var isFullyLocked: Bool { !exposureAuto && !wbAuto && !focusAuto }
+    var isFullyLocked: Bool { !exposureAuto && !wbAuto && !focusAuto && !torchAuto }
 
     override init() {
         super.init()
@@ -125,6 +143,9 @@ final class CameraController: NSObject, ObservableObject {
             frameRate = f
             desired.fps = f
         }
+        let hz = d.double(forKey: "cam.mainsHz")
+        if hz == 50 || hz == 60 { mainsHz = hz }
+        if d.object(forKey: "cam.fixShutterOnLock") != nil { fixShutterOnLock = d.bool(forKey: "cam.fixShutterOnLock") }
     }
 
     // MARK: - Lifecycle
@@ -181,7 +202,13 @@ final class CameraController: NSObject, ObservableObject {
         let discovery = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.builtInUltraWideCamera, .builtInWideAngleCamera, .builtInTelephotoCamera],
             mediaType: .video, position: .unspecified)
-        let devs = discovery.devices
+        var devs = discovery.devices
+        if !devs.contains(where: { $0.position == .front }) {
+            if let front = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+                ?? AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front) {
+                devs.append(front)
+            }
+        }
         let wide = devs.first { $0.deviceType == .builtInWideAngleCamera && $0.position == .back }
         let wideFOV = Double(wide?.activeFormat.videoFieldOfView ?? 70)
         var options: [LensOption] = []
@@ -208,10 +235,10 @@ final class CameraController: NSObject, ObservableObject {
         if session.canAddOutput(videoOutput) { session.addOutput(videoOutput) }
         session.commitConfiguration()
 
-        if let first = wide ?? devs.first {
+        if let first = wide ?? devs.first(where: { $0.position == .back }) ?? devs.first {
             switchInput(to: first)
         } else {
-            DispatchQueue.main.async { self.statusMessage = "没有可用的摄像头（模拟器请用“导入视频”测试）" }
+            DispatchQueue.main.async { self.statusMessage = L("没有可用的摄像头（模拟器请用“导入视频”测试）") }
         }
         DispatchQueue.main.async { self.lenses = options }
     }
@@ -231,7 +258,7 @@ final class CameraController: NSObject, ObservableObject {
             }
         } catch {
             if let old, session.canAddInput(old) { session.addInput(old) }
-            report("切换镜头失败: \(error.localizedDescription)")
+            report(L("切换镜头失败") + ": \(error.localizedDescription)")
         }
         applyConnectionSettings()
         session.commitConfiguration()
@@ -245,6 +272,11 @@ final class CameraController: NSObject, ObservableObject {
     private func applyConnectionSettings() {
         guard let conn = videoOutput.connection(with: .video) else { return }
         // Portrait buffers: what you see is what is analysed and recorded.
+        // Front camera: mirror image everywhere (preview, recording and analysis).
+        if conn.isVideoMirroringSupported {
+            conn.automaticallyAdjustsVideoMirroring = false
+            conn.isVideoMirrored = device?.position == .front
+        }
         if conn.isVideoRotationAngleSupported(90) { conn.videoRotationAngle = 90 }
         // Stabilisation shifts/warps the image and creates false differences → off.
         if conn.isVideoStabilizationSupported { conn.preferredVideoStabilizationMode = .off }
@@ -305,7 +337,7 @@ final class CameraController: NSObject, ObservableObject {
                 if dev.isLowLightBoostSupported { dev.automaticallyEnablesLowLightBoostWhenAvailable = false }
                 dev.unlockForConfiguration()
             } catch {
-                report("格式设置失败: \(error.localizedDescription)")
+                report(L("格式设置失败") + ": \(error.localizedDescription)")
             }
             session.commitConfiguration()
         }
@@ -336,7 +368,7 @@ final class CameraController: NSObject, ObservableObject {
             dev.videoZoomFactor = z
             dev.unlockForConfiguration()
         } catch {
-            report("变焦设置失败: \(error.localizedDescription)")
+            report(L("变焦设置失败") + ": \(error.localizedDescription)")
         }
     }
 
@@ -355,7 +387,7 @@ final class CameraController: NSObject, ObservableObject {
             let rates = dev.formats
                 .filter { Self.dims($0) == (r.width, r.height) }
                 .flatMap { $0.videoSupportedFrameRateRanges.map { $0.maxFrameRate } }
-            if let m = rates.max() { caps.append("\(r.label)：最高 \(Int(m.rounded())) fps") }
+            if let m = rates.max() { caps.append(String(format: L("%@：最高 %d fps"), r.label, Int(m.rounded()))) }
         }
         DispatchQueue.main.async {
             self.maxZoom = maxZ
@@ -376,6 +408,7 @@ final class CameraController: NSObject, ObservableObject {
             self.resolution = s.resolution
             self.frameRate = s.fps
             self.exposureAuto = s.exposureAuto
+            self.shutterAuto = s.exposureAuto && s.shutterAuto
             self.iso = s.iso
             self.shutter = s.shutter
             self.exposureBias = s.bias
@@ -386,7 +419,7 @@ final class CameraController: NSObject, ObservableObject {
             self.lensPosition = s.lensPosition
             self.torchLevel = s.torch
             self.torchAuto = s.torchAuto
-            self.torchAutoActive = s.torchAuto
+            self.autoLoopActive = s.torchAuto || s.exposureAuto
             self.zoomFactor = s.zoom
         }
     }
@@ -397,13 +430,11 @@ final class CameraController: NSObject, ObservableObject {
         guard let dev = device else { return }
         do {
             try dev.lockForConfiguration()
-            if desired.exposureAuto {
-                if dev.isExposureModeSupported(.continuousAutoExposure) {
-                    dev.exposureMode = .continuousAutoExposure
-                }
-                let b = min(max(desired.bias, dev.minExposureTargetBias), dev.maxExposureTargetBias)
-                dev.setExposureTargetBias(b, completionHandler: nil)
-            } else if dev.isExposureModeSupported(.custom) {
+            // AUTO is driven by GasCam itself (autoExposureStep) so that it meters the analysis
+            // regions and can keep the shutter fixed; the device always runs in custom mode.
+            if !dev.isExposureModeSupported(.custom) {
+                if dev.isExposureModeSupported(.continuousAutoExposure) { dev.exposureMode = .continuousAutoExposure }
+            } else {
                 let fmt = dev.activeFormat
                 let frameDur = 1 / max(desired.fps, 1)
                 let maxDur = min(fmt.maxExposureDuration.seconds, frameDur)
@@ -416,7 +447,7 @@ final class CameraController: NSObject, ObservableObject {
             }
             dev.unlockForConfiguration()
         } catch {
-            report("曝光设置失败: \(error.localizedDescription)")
+            report(L("曝光设置失败") + ": \(error.localizedDescription)")
         }
     }
 
@@ -444,7 +475,7 @@ final class CameraController: NSObject, ObservableObject {
             }
             dev.unlockForConfiguration()
         } catch {
-            report("白平衡设置失败: \(error.localizedDescription)")
+            report(L("白平衡设置失败") + ": \(error.localizedDescription)")
         }
     }
 
@@ -459,7 +490,7 @@ final class CameraController: NSObject, ObservableObject {
             }
             dev.unlockForConfiguration()
         } catch {
-            report("对焦设置失败: \(error.localizedDescription)")
+            report(L("对焦设置失败") + ": \(error.localizedDescription)")
         }
     }
 
@@ -468,7 +499,7 @@ final class CameraController: NSObject, ObservableObject {
         do {
             try dev.lockForConfiguration()
         } catch {
-            report("闪光灯设置失败: \(error.localizedDescription)")
+            report(L("闪光灯设置失败") + ": \(error.localizedDescription)")
             return
         }
         defer { dev.unlockForConfiguration() }
@@ -478,7 +509,7 @@ final class CameraController: NSObject, ObservableObject {
             do {
                 try dev.setTorchModeOn(level: min(desired.torch, AVCaptureDevice.maxAvailableTorchLevel))
             } catch {
-                report("闪光灯不可用（可能过热）: \(error.localizedDescription)")
+                report(L("闪光灯不可用（可能过热）") + ": \(error.localizedDescription)")
             }
         }
     }
@@ -523,26 +554,30 @@ final class CameraController: NSObject, ObservableObject {
 
     func setExposureAuto(_ auto: Bool) {
         exposureAuto = auto
+        shutterAuto = auto
+        lockSummary = nil
         sessionQueue.async {
-            if !auto, let dev = self.device {
-                // start manual mode from the current auto values
+            if let dev = self.device, dev.exposureDuration.seconds > 0 {
                 self.desired.iso = dev.iso
                 self.desired.shutter = dev.exposureDuration.seconds
             }
             self.desired.exposureAuto = auto
+            self.desired.shutterAuto = auto
             self.applyExposure()
             self.publishDesired()
         }
         onSettingsChanged?()
     }
 
+    /// Manual ISO: exposure becomes fully manual.
     func setISO(_ value: Float) {
         iso = value
-        let wasAuto = exposureAuto
         exposureAuto = false
+        shutterAuto = false
         sessionQueue.async {
-            if wasAuto, let dev = self.device { self.desired.shutter = dev.exposureDuration.seconds }
+            if let dev = self.device, dev.exposureDuration.seconds > 0 { self.desired.shutter = dev.exposureDuration.seconds }
             self.desired.exposureAuto = false
+            self.desired.shutterAuto = false
             self.desired.iso = value
             self.applyExposure()
             self.publishDesired()
@@ -550,18 +585,25 @@ final class CameraController: NSObject, ObservableObject {
         onSettingsChanged?()
     }
 
+    /// Manual shutter. If AUTO is on, ISO (and torch) keep following the brightness; AUTO no
+    /// longer touches the shutter until AUTO is pressed again.
     func setShutter(_ seconds: Double) {
         shutter = seconds
-        let wasAuto = exposureAuto
-        exposureAuto = false
+        shutterAuto = false
         sessionQueue.async {
-            if wasAuto, let dev = self.device { self.desired.iso = dev.iso }
-            self.desired.exposureAuto = false
+            if let dev = self.device { self.desired.iso = dev.iso }
+            self.desired.shutterAuto = false
             self.desired.shutter = seconds
             self.applyExposure()
             self.publishDesired()
         }
         onSettingsChanged?()
+    }
+
+    /// Is `seconds` a whole number of light-flicker periods (no flicker under mains lighting)?
+    func isFlickerFree(_ seconds: Double) -> Bool {
+        let k = seconds * 2 * mainsHz
+        return k >= 0.98 && abs(k - k.rounded()) < 0.02
     }
 
     func setExposureBias(_ ev: Float) {
@@ -658,9 +700,9 @@ final class CameraController: NSObject, ObservableObject {
     func setTorch(_ level: Float) {
         torchLevel = level
         torchAuto = false
-        torchAutoActive = false
         sessionQueue.async {
             self.desired.torchAuto = false
+            self.autoLoopActive = self.desired.exposureAuto
             self.desired.torch = level
             self.applyTorch()
         }
@@ -671,16 +713,18 @@ final class CameraController: NSObject, ObservableObject {
     func freezeTorch() {
         guard torchAuto else { return }
         torchAuto = false
-        torchAutoActive = false
-        sessionQueue.async { self.desired.torchAuto = false }
+        sessionQueue.async {
+            self.desired.torchAuto = false
+            self.autoLoopActive = self.desired.exposureAuto
+        }
     }
 
     func setTorchAuto(_ on: Bool) {
         let enable = on && hasTorch
         torchAuto = enable
-        torchAutoActive = enable
         sessionQueue.async {
             self.desired.torchAuto = enable
+            self.autoLoopActive = enable || self.desired.exposureAuto
             if enable && self.desired.torch < 0.02 {
                 self.desired.torch = 0.1
                 self.applyTorch()
@@ -693,13 +737,16 @@ final class CameraController: NSObject, ObservableObject {
     /// One tap: exposure, white balance, focus and torch back to automatic (zoom is left alone).
     func setAllAuto() {
         exposureAuto = true
+        shutterAuto = true
         wbAuto = true
         focusAuto = true
         let torch = hasTorch
         torchAuto = torch
-        torchAutoActive = torch
+        lockSummary = nil
         sessionQueue.async {
             self.desired.exposureAuto = true
+            self.desired.shutterAuto = true
+            self.autoLoopActive = true
             self.desired.wbAuto = true
             self.desired.focusAuto = true
             self.desired.torchAuto = torch
@@ -713,36 +760,81 @@ final class CameraController: NSObject, ObservableObject {
         onSettingsChanged?()
     }
 
-    /// Auto torch control loop, called (throttled) from the frame queue with the ROI brightness.
-    /// AE on: raise the torch until AE can run at low ISO (less noise), lower it when there is
-    /// plenty of light. AE off: hold the brightest ROI channel around 185/255.
-    func autoTorchStep(roiMax: Float) {
-        guard torchAutoActive else { return }
+    /// AUTO control loop, called from the frame queue with the brightest channel (0–255) of the
+    /// analysis regions (whole frame when none is drawn). One small step every ~0.3 s.
+    ///  dark  : torch ↑ (up to 70 %) → shutter ↑ (up to 1/fps) → ISO ↑
+    ///  bright: ISO ↓ (down to minimum) → torch ↓ (→ off) → shutter ↓
+    func autoExposureStep(level: Float) {
+        guard autoLoopActive else { return }
         let now = ProcessInfo.processInfo.systemUptime
-        guard now - lastAutoTorch >= 0.33 else { return }
-        lastAutoTorch = now
-        sessionQueue.async {
-            guard let dev = self.device, dev.hasTorch, self.desired.torchAuto else { return }
-            var level = max(0.02, self.desired.torch)
-            if roiMax >= 245 {
-                level /= 1.3
-            } else if self.desired.exposureAuto {
-                let isoTarget = max(dev.activeFormat.minISO * 2, 80)
-                let frame = 1 / max(self.desired.fps, 1)
-                if dev.iso > isoTarget * 1.2 {
-                    level *= 1.15
-                } else if dev.iso <= dev.activeFormat.minISO * 1.05 && dev.exposureDuration.seconds < 0.5 * frame {
-                    level /= 1.15
+        guard now - lastAutoStep >= 0.3 else { return }
+        lastAutoStep = now
+        sessionQueue.async { self.runAutoStep(level: level) }
+    }
+
+    private func runAutoStep(level: Float) {
+        guard let dev = device else { return }
+        let s = desired
+        guard s.exposureAuto || s.torchAuto else { return }
+        let target = Self.autoTarget * powf(2, s.bias)
+        let lv = max(level, 1)
+        var ratio = target / lv
+        if abs(logf(ratio)) < logf(1.08) { return }                 // close enough
+        ratio = min(max(powf(ratio, 0.7), 0.5), 2.0)              // damped, at most one stop per step
+        if level >= 250 { ratio = min(ratio, 0.6) }
+
+        let fmt = dev.activeFormat
+        let minISO = fmt.minISO, maxISO = fmt.maxISO
+        let minDur = fmt.minExposureDuration.seconds
+        let maxDur = min(fmt.maxExposureDuration.seconds, 1 / max(s.fps, 1))
+        let torchOK = s.torchAuto && dev.hasTorch
+        var iso = s.iso, dur = s.shutter, torch = s.torch
+        var expoChanged = false, torchChanged = false
+
+        if ratio > 1 {
+            if torchOK && torch < Self.autoTorchCap - 0.005 {
+                torch = min(Self.autoTorchCap, max(0.05, torch * ratio))
+                torchChanged = true
+            } else if s.exposureAuto {
+                var r = Double(ratio)
+                if s.shutterAuto && dur < maxDur * 0.999 {
+                    let nd = min(maxDur, dur * r)
+                    r *= dur / nd
+                    dur = nd
+                    expoChanged = true
                 }
-            } else {
-                if roiMax < 175 { level *= 1.1 } else if roiMax > 195 { level /= 1.1 }
+                if r > 1.01 && iso < maxISO {
+                    iso = min(maxISO, iso * Float(r))
+                    expoChanged = true
+                }
             }
-            level = min(1, max(0.02, level))
-            guard abs(level - self.desired.torch) > 0.005 else { return }
-            self.desired.torch = level
-            self.applyTorch()
-            DispatchQueue.main.async { self.torchLevel = level }
+        } else {
+            var r = ratio
+            if s.exposureAuto && iso > minISO * 1.001 {
+                let ni = max(minISO, iso * r)
+                r *= iso / ni
+                iso = ni
+                expoChanged = true
+            }
+            if r < 0.99 && torchOK && torch > 0 {
+                torch *= r
+                if torch < 0.03 { torch = 0 }
+                torchChanged = true
+            } else if r < 0.99 && s.exposureAuto && s.shutterAuto && dur > minDur * 1.001 {
+                dur = max(minDur, dur * Double(r))
+                expoChanged = true
+            }
         }
+        if expoChanged {
+            desired.iso = iso
+            desired.shutter = dur
+            applyExposure()
+        }
+        if torchChanged {
+            desired.torch = torch
+            applyTorch()
+        }
+        if expoChanged || torchChanged { publishDesired() }
     }
 
     /// Add or remove the microphone (level meter + audio track). Asks for permission when needed.
@@ -761,7 +853,7 @@ final class CameraController: NSObject, ObservableObject {
         default:
             DispatchQueue.main.async {
                 self.audioActive = false
-                self.statusMessage = "没有麦克风权限：声源电平和录音不可用（可在 设置 → GasCam 中打开）"
+                self.statusMessage = L("没有麦克风权限：声源电平和录音不可用（可在 设置 → GasCam 中打开）")
             }
         }
     }
@@ -790,37 +882,57 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
 
-    /// Tap-to-focus/expose. `p` is normalised in the upright portrait image.
-    func focusAndExpose(at p: CGPoint) {
-        // portrait (rotated 90°) → sensor landscape coordinates
-        let devPoint = CGPoint(x: p.y, y: 1 - p.x)
+    /// Tap to focus. `p` is normalised in the upright portrait image. (Exposure is metered on the
+    /// analysis regions, not on the tap point.)
+    func focus(at p: CGPoint) {
         sessionQueue.async {
             guard let dev = self.device else { return }
+            // portrait (rotated 90°) → sensor landscape coordinates; the front image is mirrored
+            let devPoint = dev.position == .front ? CGPoint(x: p.y, y: p.x) : CGPoint(x: p.y, y: 1 - p.x)
             do {
                 try dev.lockForConfiguration()
                 if self.desired.focusAuto && dev.isFocusPointOfInterestSupported {
                     dev.focusPointOfInterest = devPoint
                     dev.focusMode = .continuousAutoFocus
                 }
-                if self.desired.exposureAuto && dev.isExposurePointOfInterestSupported {
-                    dev.exposurePointOfInterest = devPoint
-                    dev.exposureMode = .continuousAutoExposure
-                }
                 dev.unlockForConfiguration()
             } catch {}
         }
     }
 
-    /// Freeze exposure, white balance and focus at their current values (measurement mode).
-    func lockAll(completion: (() -> Void)? = nil) {
+    /// Freeze exposure, white balance, focus and torch at their current values (measurement mode).
+    /// An automatic shutter is first moved to the nearest flicker-free value (if enabled) and the ISO
+    /// is scaled so the brightness stays the same. `completion` gets a summary of the locked values.
+    func lockAll(completion: ((String) -> Void)? = nil) {
+        let mains = mainsHz
+        let fixShutter = fixShutterOnLock
         sessionQueue.async {
             guard let dev = self.device else {
-                DispatchQueue.main.async { completion?() }
+                DispatchQueue.main.async { completion?("") }
                 return
             }
-            self.desired.iso = dev.iso
-            self.desired.shutter = dev.exposureDuration.seconds
+            let fmt = dev.activeFormat
+            var iso = dev.iso
+            var dur = dev.exposureDuration.seconds
+            if dur <= 0 { dur = self.desired.shutter }
+            var flickerNote = ""
+            if fixShutter && self.desired.exposureAuto && self.desired.shutterAuto {
+                let period = 1 / (2 * mains)
+                let maxDur = min(fmt.maxExposureDuration.seconds, 1 / max(self.desired.fps, 1))
+                let kMax = Int((maxDur / period + 1e-6).rounded(.down))
+                if kMax >= 1 {
+                    let best = (1...kMax).map { Double($0) * period }
+                        .min { abs(log($0 / dur)) < abs(log($1 / dur)) } ?? dur
+                    iso = min(max(iso * Float(dur / best), fmt.minISO), fmt.maxISO)
+                    dur = best
+                } else {
+                    flickerNote = " · " + String(format: L("%d fps 无法防频闪"), Int(self.desired.fps))
+                }
+            }
+            self.desired.iso = iso
+            self.desired.shutter = dur
             self.desired.exposureAuto = false
+            self.desired.shutterAuto = false
             let tt = dev.temperatureAndTintValues(for: dev.deviceWhiteBalanceGains)
             self.desired.temperature = tt.temperature
             self.desired.tint = tt.tint
@@ -828,12 +940,12 @@ final class CameraController: NSObject, ObservableObject {
             self.desired.lensPosition = dev.lensPosition
             self.desired.focusAuto = false
             self.desired.torchAuto = false
-            self.torchAutoActive = false
+            self.autoLoopActive = false
             do {
                 try dev.lockForConfiguration()
                 if dev.isExposureModeSupported(.custom) {
-                    dev.setExposureModeCustom(duration: AVCaptureDevice.currentExposureDuration,
-                                              iso: AVCaptureDevice.currentISO, completionHandler: nil)
+                    dev.setExposureModeCustom(duration: CMTime(seconds: dur, preferredTimescale: 1_000_000_000),
+                                              iso: iso, completionHandler: nil)
                 }
                 if dev.isWhiteBalanceModeSupported(.locked) {
                     dev.setWhiteBalanceModeLocked(with: AVCaptureDevice.currentWhiteBalanceGains, completionHandler: nil)
@@ -843,11 +955,14 @@ final class CameraController: NSObject, ObservableObject {
                 }
                 dev.unlockForConfiguration()
             } catch {
-                self.report("锁定失败: \(error.localizedDescription)")
+                self.report(L("锁定失败") + ": \(error.localizedDescription)")
             }
             self.publishDesired()
+            let torchText = dev.hasTorch ? " · " + L("闪光") + " \(Int((self.desired.torch * 100).rounded()))%" : ""
+            let summary = "ISO \(Int(iso.rounded())) · \(dur.shutterLabel)\(torchText) · \(Int(tt.temperature.rounded()))K" + flickerNote
+            DispatchQueue.main.async { self.lockSummary = summary }
             // give the ISP a moment to settle before the baseline is taken
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { completion?() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { completion?(summary) }
         }
     }
 
@@ -899,6 +1014,8 @@ final class CameraController: NSObject, ObservableObject {
             "resolution": resolution.label,
             "fps": frameRate,
             "exposure_auto": exposureAuto,
+            "shutter_auto": shutterAuto,
+            "mains_hz": mainsHz,
             "iso": iso,
             "shutter_s": shutter,
             "shutter_angle_deg": shutterAngle,

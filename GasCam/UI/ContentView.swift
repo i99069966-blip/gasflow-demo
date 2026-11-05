@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var editROI = false
     @State private var showGasPanel = false
+    @StateObject private var regionEdit = RegionEditState()
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -19,7 +20,10 @@ struct ContentView: View {
                 ZStack(alignment: .bottom) {
                     PreviewArea(editROI: $editROI)
                     VStack(spacing: 6) {
-                        if pipeline.source == .camera, let c = activeControl {
+                        if editROI {
+                            RegionPanel(editing: $editROI)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        } else if pipeline.source == .camera, let c = activeControl {
                             ControlPanel(kind: c)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
@@ -41,7 +45,7 @@ struct ContentView: View {
                 }
                 .overlay(alignment: .topTrailing) {
                     AssistColumn(editROI: $editROI,
-                                 forceCollapsed: showGasPanel || (pipeline.source == .camera && activeControl != nil))
+                                 forceCollapsed: showGasPanel || editROI || (pipeline.source == .camera && activeControl != nil))
                         .padding(.top, 8)
                         .padding(.trailing, 6)
                 }
@@ -64,6 +68,10 @@ struct ContentView: View {
             if pipeline.source == .camera && (camera.authorization == .denied || camera.authorization == .restricted) {
                 permissionView
             }
+        }
+        .environmentObject(regionEdit)
+        .onChange(of: editROI) { _, on in
+            if on { activeControl = nil; showGasPanel = false }
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
@@ -95,14 +103,14 @@ struct ContentView: View {
     private var permissionView: some View {
         VStack(spacing: 12) {
             Image(systemName: "camera.fill").font(.largeTitle)
-            Text("需要相机权限").font(.headline)
-            Text("请在 设置 → GasCam 中允许访问相机。\n也可以在设置页导入视频进行离线分析。")
+            Text(L("需要相机权限")).font(.headline)
+            Text(L("请在 设置 → GasCam 中允许访问相机。\n也可以在设置页导入视频进行离线分析。"))
                 .font(.footnote).multilineTextAlignment(.center).foregroundStyle(.gray)
-            Button("打开设置") {
+            Button(L("打开设置")) {
                 if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
             }
             .buttonStyle(.borderedProminent)
-            Button("导入视频分析") { showSettings = true }
+            Button(L("导入视频分析")) { showSettings = true }
         }
         .padding(24)
         .background(Color(white: 0.1))

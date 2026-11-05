@@ -92,7 +92,7 @@ final class VideoRecorder {
         guard let w = writer, sessionStarted else {
             writer?.cancelWriting()
             writer = nil
-            completion(nil, lastError ?? "没有写入任何帧")
+            completion(nil, lastError ?? L("没有写入任何帧"))
             return
         }
         input?.markAsFinished()
@@ -128,7 +128,7 @@ final class VideoRecorder {
             inp.expectsMediaDataInRealTime = true
             let ad = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: inp, sourcePixelBufferAttributes: nil)
             guard w.canAdd(inp) else {
-                lastError = "无法添加视频轨道"
+                lastError = L("无法添加视频轨道")
                 config = nil
                 return
             }
@@ -170,15 +170,25 @@ final class AnalysisLogger {
     private let handle: FileHandle
     private var buffer = ""
     private var rows = 0
+    private let regionCount: Int
 
-    static let header = "t_s,phase,roi_mean_R,roi_mean_G,roi_mean_B,mean_resp_pct,max_resp_pct,active_frac,hotspot_x,hotspot_y,arrived_px,src_mode,src_angle_deg,src_conf,entry_x,entry_y,src_x,src_y\n"
+    static let header = "t_s,phase,roi_mean_R,roi_mean_G,roi_mean_B,mean_resp_pct,max_resp_pct,active_frac,hotspot_x,hotspot_y,arrived_px,src_mode,src_angle_deg,src_conf,entry_x,entry_y,src_x,src_y,scale_pct,ref_factor"
 
-    init?(url: URL, comment: String) {
+    /// Per region k (1-based): raw mean colour, mean response, reached fraction, reach time (s after baseline).
+    static func regionHeader(_ n: Int) -> String {
+        (1...max(1, n)).map { k in
+            "r\(k)_R,r\(k)_G,r\(k)_B,r\(k)_resp_pct,r\(k)_arrived_frac,r\(k)_arrival_s"
+        }.joined(separator: ",")
+    }
+
+    init?(url: URL, comment: String, regionCount: Int) {
         self.url = url
+        self.regionCount = max(1, regionCount)
         guard FileManager.default.createFile(atPath: url.path, contents: nil),
               let h = try? FileHandle(forWritingTo: url) else { return nil }
         handle = h
-        buffer = comment.split(separator: "\n").map { "# \($0)" }.joined(separator: "\n") + "\n" + Self.header
+        buffer = comment.split(separator: "\n").map { "# \($0)" }.joined(separator: "\n") + "\n"
+            + Self.header + "," + Self.regionHeader(self.regionCount) + "\n"
     }
 
     func log(t: Double, result r: GasFrameResult) {
@@ -204,6 +214,17 @@ final class AnalysisLogger {
                        String(format: "%.4f", s.sourcePoint.x), String(format: "%.4f", s.sourcePoint.y)]
         } else {
             fields += ["0", "", "", "", "", "", "", ""]
+        }
+        fields += [String(format: "%.2f", r.displayScale), String(format: "%.4f", r.refFactor)]
+        for k in 0..<regionCount {
+            if k < r.regions.count {
+                let g = r.regions[k]
+                fields += [String(format: "%.2f", g.raw.r), String(format: "%.2f", g.raw.g), String(format: "%.2f", g.raw.b),
+                           String(format: "%.3f", g.meanResponse), String(format: "%.4f", g.arrivedFraction),
+                           g.arrivalTime.map { String(format: "%.3f", $0) } ?? ""]
+            } else {
+                fields += ["", "", "", "", "", ""]
+            }
         }
         buffer += fields.joined(separator: ",") + "\n"
         rows += 1

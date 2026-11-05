@@ -12,7 +12,7 @@ struct TopBar: View {
             } else {
                 HStack(spacing: 2) {
                     chip("FPS", fpsText, kind: .fps, auto: false)
-                    chip("SHUTTER", camera.shutter.shutterLabel, kind: .shutter, auto: camera.exposureAuto)
+                    chip("SHUTTER", camera.shutter.shutterLabel, kind: .shutter, auto: camera.shutterAuto)
                     chip("ISO", "\(Int(camera.iso.rounded()))", kind: .iso, auto: camera.exposureAuto)
                     chip("WB", "\(Int(camera.temperature.rounded()))K", kind: .wb, auto: camera.wbAuto)
                     chip("FOCUS", String(format: "%.2f", camera.lensPosition), kind: .focus, auto: camera.focusAuto)
@@ -39,8 +39,15 @@ struct TopBar: View {
 
     private var infoRow: some View {
         HStack(spacing: 8) {
-            Text("\(camera.resolution.label) · \(pipeline.recordSettings.codec.label) · \(Int(pipeline.recordSettings.bitrateMbps))Mb/s")
-                .lineLimit(1)
+            if camera.isFullyLocked, let s = camera.lockSummary, !s.isEmpty {
+                Label(s, systemImage: "lock.fill")
+                    .foregroundStyle(Theme.accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            } else {
+                Text("\(camera.resolution.label) · \(pipeline.recordSettings.codec.label) · \(Int(pipeline.recordSettings.bitrateMbps))Mb/s")
+                    .lineLimit(1)
+            }
             Spacer(minLength: 2)
             Button { pipeline.lockAllCamera() } label: {
                 Label("LOCK", systemImage: "lock.fill")

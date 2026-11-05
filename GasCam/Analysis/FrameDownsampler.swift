@@ -84,7 +84,7 @@ struct Histogram: Equatable {
                 if R >= 255 || G >= 255 || B >= 255 { clip += 1 }
             }
         }
-        let m = Float(max(1, max(hr.max() ?? 1, hg.max() ?? 1, hb.max() ?? 1, hy.max() ?? 1)))
+        let m = Float(max(1, max(hr.max() ?? 1, hg.max() ?? 1, hb.max() ?? 1)))
         var h = Histogram()
         // square-root scale keeps small populations visible
         h.r = hr.map { ($0 > 0 ? Float($0).squareRoot() / m.squareRoot() : 0) }
