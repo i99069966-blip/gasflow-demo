@@ -34,7 +34,7 @@ struct ControlPanel: View {
                      selected: camera.resolution.label, disabled: pipeline.isRecording) { label in
                 if let r = VideoResolution.allCases.first(where: { $0.label == label }) { camera.setResolution(r) }
             }
-            caption(L("帧率 (fps)"))
+            HStack(spacing: 0) { caption(L("帧率 (fps)")); InfoButton(.fps) }
             chipsRow(camera.supportedFrameRates.map { "\(Int($0))" },
                      selected: "\(camera.frameRate.safeInt)", disabled: pipeline.isRecording) { s in
                 if let f = Double(s) { camera.setFrameRate(f) }
@@ -59,6 +59,7 @@ struct ControlPanel: View {
                 Text(String(format: "%@  ·  %.0f°", camera.shutter.shutterLabel, camera.shutterAngle))
                     .font(Theme.mono(13, .semibold))
                     .foregroundStyle(camera.isFlickerFree(camera.shutter) ? Color.green : Color.white)
+                InfoButton(.shutter)
                 Spacer()
             }
             HStack(spacing: 6) {
@@ -92,7 +93,7 @@ struct ControlPanel: View {
                 .font(Theme.mono(10)).foregroundStyle(.gray)
             if camera.exposureAuto {
                 ValueSlider(label: "EV", value: Binding(get: { camera.exposureBias }, set: { camera.setExposureBias($0) }),
-                            range: camera.biasRange) { String(format: "%+.1f", $0) }
+                            range: camera.biasRange, help: .ev) { String(format: "%+.1f", $0) }
             }
         }
     }
@@ -113,7 +114,7 @@ struct ControlPanel: View {
                 if let v = Float(s) { camera.setISO(v) }
             }
             ValueSlider(label: "ISO", value: Binding(get: { camera.iso }, set: { camera.setISO($0) }),
-                        range: camera.isoRange) { "\(Int($0.rounded()))" }
+                        range: camera.isoRange, help: .iso) { "\(Int($0.rounded()))" }
         }
     }
 
@@ -134,7 +135,7 @@ struct ControlPanel: View {
             }
             ValueSlider(label: L("色温"), value: Binding(get: { camera.temperature },
                                                     set: { camera.setWhiteBalance(temperature: $0, tint: camera.tint) }),
-                        range: 2000...10000) { "\(Int($0.rounded()))K" }
+                        range: 2000...10000, help: .wb) { "\(Int($0.rounded()))K" }
             ValueSlider(label: L("色调"), value: Binding(get: { camera.tint },
                                                     set: { camera.setWhiteBalance(temperature: camera.temperature, tint: $0) }),
                         range: -150...150) { String(format: "%+.0f", $0) }
@@ -153,7 +154,7 @@ struct ControlPanel: View {
             }
             if camera.canManualFocus {
                 ValueSlider(label: L("焦点"), value: Binding(get: { camera.lensPosition }, set: { camera.setLensPosition($0) }),
-                            range: 0...1) { String(format: "%.3f", $0) }
+                            range: 0...1, help: .focus) { String(format: "%.3f", $0) }
             }
             Text(L("提示：打开右侧 PEAK（峰值对焦）辅助手动对焦。")).font(Theme.mono(10)).foregroundStyle(.gray)
         }
@@ -220,7 +221,7 @@ struct ControlPanel: View {
                     }
                 }
                 ValueSlider(label: L("亮度"), value: Binding(get: { camera.torchLevel }, set: { camera.setTorch($0) }),
-                            range: 0...1) { "\(Int(($0 * 100).rounded()))%" }
+                            range: 0...1, help: .torch) { "\(Int(($0 * 100).rounded()))%" }
                 Text(L("闪光灯常亮作为光源；长时间高亮度可能因过热被系统降低。")).font(Theme.mono(10)).foregroundStyle(.gray)
             } else {
                 Text(L("当前镜头没有闪光灯")).font(Theme.mono(12)).foregroundStyle(.gray)

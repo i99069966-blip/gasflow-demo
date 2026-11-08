@@ -94,11 +94,17 @@ struct ValueSlider<V: BinaryFloatingPoint>: View where V.Stride: BinaryFloatingP
     let label: String
     @Binding var value: V
     let range: ClosedRange<V>
+    var help: HelpTopic? = nil
     let format: (V) -> String
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(label).font(Theme.mono(11)).foregroundStyle(.gray).frame(width: 52, alignment: .leading)
+            HStack(spacing: 0) {
+                Text(label).font(Theme.mono(11)).foregroundStyle(.gray)
+                    .lineLimit(2).minimumScaleFactor(0.8)
+                if let help { InfoButton(help) }
+            }
+            .frame(width: help == nil ? 52 : 74, alignment: .leading)
             Slider(value: $value, in: range)
                 .tint(Theme.accent)
             Text(format(value)).font(Theme.mono(12, .semibold)).frame(width: 64, alignment: .trailing)

@@ -130,21 +130,21 @@ struct SettingsView: View {
 
     private var recordingSection: some View {
         Section {
-            Picker(L("分辨率"), selection: Binding(get: { camera.resolution }, set: { camera.setResolution($0) })) {
+            Picker(selection: Binding(get: { camera.resolution }, set: { camera.setResolution($0) })) {
                 ForEach(camera.supportedResolutions) { r in Text(r.label).tag(r) }
-            }
+            } label: { HelpLabel(L("分辨率"), .resolution) }
             .disabled(pipeline.isRecording)
-            Picker(L("帧率"), selection: Binding(get: { camera.frameRate }, set: { camera.setFrameRate($0) })) {
+            Picker(selection: Binding(get: { camera.frameRate }, set: { camera.setFrameRate($0) })) {
                 ForEach(camera.supportedFrameRates, id: \.self) { f in Text("\(Int(f)) fps").tag(f) }
-            }
+            } label: { HelpLabel(L("帧率"), .fps) }
             .disabled(pipeline.isRecording)
-            Picker(L("编码"), selection: $pipeline.recordSettings.codec) {
+            Picker(selection: $pipeline.recordSettings.codec) {
                 ForEach(VideoCodec.allCases) { c in Text(c.label).tag(c) }
-            }
+            } label: { HelpLabel(L("编码"), .codec) }
             .disabled(pipeline.isRecording)
-            Picker(L("比特率"), selection: $pipeline.recordSettings.bitrateMbps) {
+            Picker(selection: $pipeline.recordSettings.bitrateMbps) {
                 ForEach(RecordSettings.bitratePresets, id: \.self) { b in Text("\(Int(b)) Mb/s").tag(b) }
-            }
+            } label: { HelpLabel(L("比特率"), .bitrate) }
             .disabled(pipeline.isRecording)
             Toggle(L("录完存入相册"), isOn: $pipeline.recordSettings.saveToPhotos)
             Toggle(L("同时写 CSV 分析日志"), isOn: $pipeline.recordSettings.writeCSV)
@@ -158,14 +158,14 @@ struct SettingsView: View {
 
     private var cameraSection: some View {
         Section {
-            Picker(L("电网频率（灯光频闪）"), selection: $camera.mainsHz) {
+            Picker(selection: $camera.mainsHz) {
                 Text(L("60 Hz（九州・关西）")).tag(60.0)
                 Text(L("50 Hz（关东・东北）")).tag(50.0)
-            }
-            Picker(L("AUTO 最高 ISO"), selection: $camera.autoISOCap) {
+            } label: { HelpLabel(L("电网频率（灯光频闪）"), .mains) }
+            Picker(selection: $camera.autoISOCap) {
                 ForEach([Float(200), 400, 800, 1600, 3200], id: \.self) { v in Text("\(Int(v))").tag(v) }
-            }
-            ValueSlider(label: L("AUTO 闪光灯上限"), value: $camera.autoTorchLimit, range: 0.1...1) {
+            } label: { HelpLabel(L("AUTO 最高 ISO"), .autoISOCap) }
+            ValueSlider(label: L("AUTO 闪光灯上限"), value: $camera.autoTorchLimit, range: 0.1...1, help: .autoTorchLimit) {
                 "\(Int(($0 * 100).rounded()))%"
             }
         } header: {
@@ -180,9 +180,9 @@ struct SettingsView: View {
             Toggle(L("直方图"), isOn: $pipeline.display.showHistogram)
             Toggle(L("假色 False Color"), isOn: $pipeline.display.falseColor)
             Toggle(L("斑马纹 Zebra"), isOn: $pipeline.display.zebra)
-            ValueSlider(label: L("斑马阈值"), value: $pipeline.display.zebraLevel, range: 0.70...1.0) { "\(Int(($0 * 100).rounded()))%" }
+            ValueSlider(label: L("斑马阈值"), value: $pipeline.display.zebraLevel, range: 0.70...1.0, help: .zebraLevel) { "\(Int(($0 * 100).rounded()))%" }
             Toggle(L("峰值对焦 Peaking"), isOn: $pipeline.display.peaking)
-            ValueSlider(label: L("峰值灵敏"), value: $pipeline.display.peakingThreshold, range: 0.05...0.6) { String(format: "%.2f", $0) }
+            ValueSlider(label: L("峰值灵敏"), value: $pipeline.display.peakingThreshold, range: 0.05...0.6, help: .peaking) { String(format: "%.2f", $0) }
             Toggle(L("三分线"), isOn: $pipeline.display.grid)
             Toggle(L("中心十字"), isOn: $pipeline.display.crosshair)
             Toggle(L("水平仪（镜头朝下）"), isOn: $pipeline.display.level)
@@ -191,32 +191,34 @@ struct SettingsView: View {
             Toggle(L("显示最大响应点（十字）"), isOn: $pipeline.display.showHotspot)
             Toggle(L("显示变化曲线"), isOn: $pipeline.display.showChart)
             Toggle(L("显示色标条"), isOn: $pipeline.display.showColorBar)
+            Toggle(isOn: $pipeline.display.blackBackground) { HelpLabel(L("黑底显示"), .blackBackground) }
+            Toggle(L("显示实验步骤"), isOn: $pipeline.display.showSteps)
             Toggle(L("声源显示（麦克风电平表）"), isOn: $pipeline.display.showAudioMeter)
-            ValueSlider(label: L("叠加透明"), value: $pipeline.display.overlayOpacity, range: 0.1...1.0) { String(format: "%.2f", $0) }
+            ValueSlider(label: L("叠加透明"), value: $pipeline.display.overlayOpacity, range: 0.1...1.0, help: .overlayOpacity) { String(format: "%.2f", $0) }
         }
     }
 
     private var detectionSection: some View {
         Section {
-            Picker(L("信号通道"), selection: $pipeline.params.channel) {
+            Picker(selection: $pipeline.params.channel) {
                 ForEach(SignalChannel.allCases) { c in Text(L(c.label)).tag(c) }
-            }
-            Picker(L("响应方向"), selection: $pipeline.params.polarity) {
+            } label: { HelpLabel(L("信号通道"), .channel) }
+            Picker(selection: $pipeline.params.polarity) {
                 ForEach(ResponsePolarity.allCases) { p in Text(L(p.label)).tag(p) }
-            }
-            ValueSlider(label: L("最小阈值"), value: $pipeline.params.minPercent, range: 0.2...10) { String(format: "%.1f%%", $0) }
-            ValueSlider(label: "k·σ", value: $pipeline.params.kSigma, range: 1...10) { String(format: "%.1f", $0) }
-            Toggle(L("自动色标"), isOn: $pipeline.params.autoScale)
+            } label: { HelpLabel(L("响应方向"), .polarity) }
+            ValueSlider(label: L("最小阈值"), value: $pipeline.params.minPercent, range: 0.2...10, help: .threshold) { String(format: "%.1f%%", $0) }
+            ValueSlider(label: "k·σ", value: $pipeline.params.kSigma, range: 1...10, help: .kSigma) { String(format: "%.1f", $0) }
+            Toggle(isOn: $pipeline.params.autoScale) { HelpLabel(L("自动色标"), .autoScale) }
             if !pipeline.params.autoScale {
-                ValueSlider(label: L("色标上限"), value: $pipeline.params.displayMaxPercent, range: 1...40) { String(format: "%.0f%%", $0) }
+                ValueSlider(label: L("色标上限"), value: $pipeline.params.displayMaxPercent, range: 1...40, help: .displayMax) { String(format: "%.0f%%", $0) }
             }
-            ValueSlider(label: L("到达色标"), value: $pipeline.params.arrivalSpan, range: 0.1...10) { String(format: "%.1fs", $0) }
-            ValueSlider(label: L("区域到达"), value: $pipeline.params.regionArrivalFraction, range: 0.01...0.8) {
+            ValueSlider(label: L("到达色标"), value: $pipeline.params.arrivalSpan, range: 0.1...10, help: .arrivalSpan) { String(format: "%.1fs", $0) }
+            ValueSlider(label: L("区域到达"), value: $pipeline.params.regionArrivalFraction, range: 0.01...0.8, help: .regionArrival) {
                 String(format: "%.0f%%", $0 * 100)
             }
-            Toggle(L("参考框校正"), isOn: $pipeline.params.useReference)
+            Toggle(isOn: $pipeline.params.useReference) { HelpLabel(L("参考框校正"), .useReference) }
                 .disabled(pipeline.regions.reference == nil)
-            Toggle(L("取基线时锁定 AE/AWB/AF"), isOn: $pipeline.params.lockCameraOnBaseline)
+            Toggle(isOn: $pipeline.params.lockCameraOnBaseline) { HelpLabel(L("取基线时锁定 AE/AWB/AF"), .lockOnBaseline) }
         } header: {
             Text(L("气体检测"))
         } footer: {
@@ -226,25 +228,29 @@ struct SettingsView: View {
 
     private var advancedSection: some View {
         Section {
-            Stepper(String(format: L("空间平滑半径: %d"), pipeline.params.blurRadius), value: $pipeline.params.blurRadius, in: 0...8)
-            ValueSlider(label: L("基线时长"), value: $pipeline.params.baselineSeconds, range: 0.2...10) { String(format: "%.1f s", $0) }
-            Stepper(String(format: L("确认帧数: %d"), pipeline.params.confirmFrames), value: $pipeline.params.confirmFrames, in: 1...10)
-            ValueSlider(label: L("时间平滑"), value: $pipeline.params.emaAlpha, range: 0.05...1) { String(format: "α %.2f", $0) }
-            Picker(L("分析频率"), selection: $pipeline.params.analysisRate) {
+            Stepper(value: $pipeline.params.blurRadius, in: 0...8) {
+                HelpLabel(String(format: L("空间平滑半径: %d"), pipeline.params.blurRadius), .blur)
+            }
+            ValueSlider(label: L("基线时长"), value: $pipeline.params.baselineSeconds, range: 0.2...10, help: .baselineSeconds) { String(format: "%.1f s", $0) }
+            Stepper(value: $pipeline.params.confirmFrames, in: 1...10) {
+                HelpLabel(String(format: L("确认帧数: %d"), pipeline.params.confirmFrames), .confirmFrames)
+            }
+            ValueSlider(label: L("时间平滑"), value: $pipeline.params.emaAlpha, range: 0.05...1, help: .ema) { String(format: "α %.2f", $0) }
+            Picker(selection: $pipeline.params.analysisRate) {
                 Text("15 Hz").tag(15.0)
                 Text("30 Hz").tag(30.0)
                 Text("60 Hz").tag(60.0)
                 Text(L("每帧")).tag(1000.0)
-            }
-            ValueSlider(label: L("方向置信"), value: $pipeline.params.directionConfMin, range: 0.05...0.8) { String(format: "%.2f", $0) }
-            ValueSlider(label: L("最少到达"), value: $pipeline.params.minArrivedFraction, range: 0.001...0.1) { String(format: "%.1f%%", $0 * 100) }
-            Picker(L("自动重置"), selection: $pipeline.params.autoRearmSeconds) {
+            } label: { HelpLabel(L("分析频率"), .analysisRate) }
+            ValueSlider(label: L("方向置信"), value: $pipeline.params.directionConfMin, range: 0.05...0.8, help: .directionConf) { String(format: "%.2f", $0) }
+            ValueSlider(label: L("最少到达"), value: $pipeline.params.minArrivedFraction, range: 0.001...0.1, help: .minArrived) { String(format: "%.1f%%", $0 * 100) }
+            Picker(selection: $pipeline.params.autoRearmSeconds) {
                 Text(L("关闭")).tag(0.0)
                 Text(L("气体消失 3 s 后")).tag(3.0)
                 Text(L("气体消失 5 s 后")).tag(5.0)
                 Text(L("气体消失 10 s 后")).tag(10.0)
-            }
-            Toggle(L("基线漂移跟踪（慢速）"), isOn: $pipeline.params.baselineTracking)
+            } label: { HelpLabel(L("自动重置"), .autoRearm) }
+            Toggle(isOn: $pipeline.params.baselineTracking) { HelpLabel(L("基线漂移跟踪（慢速）"), .baselineTracking) }
             Button(L("恢复检测默认值")) { pipeline.params = GasParams() }
             Button(L("清除所有分析框")) { pipeline.regions = AnalysisRegions() }
         } header: {

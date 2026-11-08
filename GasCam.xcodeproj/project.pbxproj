@@ -27,6 +27,7 @@
 		091D0686EBE6823F484BFAC7 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF752E97FA5573A8F648B8C /* Components.swift */; };
 		2E958D70619E0EC1FAAA3083 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1627B0F655F3D44658867B0E /* ContentView.swift */; };
 		0D782B8FCBBEAF368C0EA640 /* ControlPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */; };
+		B68725786EBCF71D5F162669 /* Help.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5FF579FA7624A1BF62C7549 /* Help.swift */; };
 		5DE3108726ADEDE6677B92BE /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB45C5FEE899B997B0EF65C /* HistogramView.swift */; };
 		F2A4F6DBCCE8DEF9268C5E84 /* PreviewArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */; };
 		F92B0D847D6D2D8DECF860E3 /* RegionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E868C93E9A48E295E66F06BC /* RegionEditor.swift */; };
@@ -59,6 +60,7 @@
 		9DFF4B63DD6588FE031C961D /* FrameDownsampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameDownsampler.swift; sourceTree = "<group>"; };
 		A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArea.swift; sourceTree = "<group>"; };
 		AC18D468BADB09EC38EBD5CC /* ChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartView.swift; sourceTree = "<group>"; };
+		B5FF579FA7624A1BF62C7549 /* Help.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Help.swift; sourceTree = "<group>"; };
 		B68FECD15DB2763B5B01C525 /* CrashReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReporter.swift; sourceTree = "<group>"; };
 		BDB45C5FEE899B997B0EF65C /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
 		DBD196AC409C640F44479847 /* CameraSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSettings.swift; sourceTree = "<group>"; };
@@ -170,6 +172,7 @@
 				4FF752E97FA5573A8F648B8C /* Components.swift */,
 				1627B0F655F3D44658867B0E /* ContentView.swift */,
 				FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */,
+				B5FF579FA7624A1BF62C7549 /* Help.swift */,
 				BDB45C5FEE899B997B0EF65C /* HistogramView.swift */,
 				A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */,
 				E868C93E9A48E295E66F06BC /* RegionEditor.swift */,
@@ -285,6 +288,7 @@
 				091D0686EBE6823F484BFAC7 /* Components.swift in Sources */,
 				2E958D70619E0EC1FAAA3083 /* ContentView.swift in Sources */,
 				0D782B8FCBBEAF368C0EA640 /* ControlPanel.swift in Sources */,
+				B68725786EBCF71D5F162669 /* Help.swift in Sources */,
 				5DE3108726ADEDE6677B92BE /* HistogramView.swift in Sources */,
 				F2A4F6DBCCE8DEF9268C5E84 /* PreviewArea.swift in Sources */,
 				F92B0D847D6D2D8DECF860E3 /* RegionEditor.swift in Sources */,
@@ -373,7 +377,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -393,7 +397,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.5;
+				MARKETING_VERSION = 1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "jp.lab.lspr.GasCam";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -410,7 +414,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -430,7 +434,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.5;
+				MARKETING_VERSION = 1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "jp.lab.lspr.GasCam";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

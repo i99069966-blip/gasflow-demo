@@ -485,7 +485,7 @@ final class GasAnalyzer {
             let mu = max(mean[i], 1e-3)
             let sigmaPct = 100 * (max(m2[i], 0) / Float(n)).squareRoot() / mu
             thr[i] = max(params.minPercent, params.kSigma * sigmaPct)
-            if i % 4 == 0 { noise.append(sigmaPct) }
+            if i % 2 == 0 && saturationOK[i] != 0 && masks.bits[i] != 0 && sigmaPct.isFinite { noise.append(sigmaPct) }
         }
         noise.sort()
         noiseMedian = noise.isEmpty ? 0 : noise[noise.count / 2]

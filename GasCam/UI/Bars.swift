@@ -4,10 +4,23 @@ import SwiftUI
 struct GasStatusBar: View {
     @EnvironmentObject var pipeline: FramePipeline
     @Binding var showGasPanel: Bool
+    @State private var dismissedNoise: Float = -1
+    @State private var dismissedChannels = ""
 
     var body: some View {
         let r = pipeline.result
         VStack(spacing: 6) {
+            if let rec = recommendedThreshold(r) {
+                suggestion(String(format: L("噪声 %.2f%% → 推荐检测阈值 %.1f%%（现在 %.1f%%）"),
+                                  r.noiseMedianPercent, rec, pipeline.params.minPercent),
+                           apply: { pipeline.params.minPercent = rec; dismissedNoise = r.noiseMedianPercent },
+                           dismiss: { dismissedNoise = r.noiseMedianPercent })
+            }
+            if let sug = channelSuggestion() {
+                suggestion(String(format: L("推荐信号通道 %@（信噪比 %@）"), sug.0.shortName, sug.1),
+                           apply: { pipeline.params.channel = sug.0.channel; dismissedChannels = sug.1 },
+                           dismiss: { dismissedChannels = sug.1 })
+            }
             HStack(spacing: 8) {
                 phasePill(r)
                 if let s = r.gasPresent ? r.source : (pipeline.display.keepLastResult ? (r.source ?? r.lastSource) : nil) {
@@ -67,6 +80,45 @@ struct GasStatusBar: View {
         .background(Theme.bar)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 6)
+    }
+
+    /// After a baseline: 8 × the measured pixel noise (rounded, 0.5–5 %), if it differs from the setting.
+    private func recommendedThreshold(_ r: GasFrameResult) -> Float? {
+        switch r.phase {
+        case .monitoring, .detected: break
+        default: return nil
+        }
+        let s = r.noiseMedianPercent
+        guard s > 0, s.isFinite, s != dismissedNoise else { return nil }
+        let rec = min(5, max(0.5, (8 * s * 10).rounded() / 10))
+        return abs(rec - pipeline.params.minPercent) >= 0.2 ? rec : nil
+    }
+
+    /// Video: the channel with the best signal-to-noise, if it is not the one in use.
+    private func channelSuggestion() -> (ChannelScore, String)? {
+        guard case .file = pipeline.source, let best = pipeline.channelReport.first,
+              best.channel != pipeline.params.channel else { return nil }
+        let key = pipeline.channelReport.map { "\($0.shortName) \(Int($0.snr.rounded()))" }.joined(separator: " · ")
+        return key == dismissedChannels ? nil : (best, key)
+    }
+
+    private func suggestion(_ text: String, apply: @escaping () -> Void, dismiss: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "lightbulb.fill").font(.system(size: 11)).foregroundStyle(Theme.accent)
+            Text(text).font(Theme.mono(10.5, .semibold)).lineLimit(2).minimumScaleFactor(0.8)
+            Spacer(minLength: 2)
+            Button(action: apply) {
+                Text(L("采用")).font(Theme.mono(11, .bold)).foregroundStyle(.black)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Theme.accent).clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            Button(action: dismiss) {
+                Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.gray)
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     /// Reference box: correction factor (correction on) or its own change since the baseline (off).
@@ -356,6 +408,7 @@ struct AssistColumn: View {
             AssistToggle(text: "LVL", isOn: pipeline.display.level) { pipeline.display.level.toggle() }
             AssistToggle(text: "ROI", isOn: editROI) { editROI.toggle() }
             AssistToggle(text: "➚", isOn: pipeline.display.showArrow) { pipeline.display.showArrow.toggle() }
+            AssistToggle(text: "BLK", isOn: pipeline.display.blackBackground) { pipeline.display.blackBackground.toggle() }
             AssistToggle(text: "CRV", isOn: pipeline.display.showChart) { pipeline.display.showChart.toggle() }
         }
     }

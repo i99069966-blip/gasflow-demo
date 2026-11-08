@@ -87,6 +87,18 @@ struct PreviewOverlay: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
+                if opt.showSteps && pipeline.source == .camera && !editROI {
+                    StepGuide()
+                }
+                if opt.falseColor && !(opt.blackBackground && opt.overlay != .live) {
+                    FalseColorLegend()
+                }
+                if opt.zebra {
+                    AssistHint(text: String(format: L("ZEB：斜纹 = 亮度超过 %d%%，快过曝"), Int((opt.zebraLevel * 100).rounded())))
+                }
+                if opt.peaking {
+                    AssistHint(text: L("PEAK：红边 = 对焦清楚的地方"))
+                }
                 if opt.showColorBar && opt.overlay != .live && pipeline.result.phase != .waiting {
                     ColorBarView(mode: opt.overlay, scale: r.displayScale,
                                  flowScale: pipeline.params.flowScalePercent, arrivalSpan: pipeline.params.arrivalSpan)
@@ -106,7 +118,7 @@ struct PreviewOverlay: View {
             .padding(.trailing, 52)
             .allowsHitTesting(false)
 
-            if r.phase == .waiting && pipeline.source == .camera && !editROI {
+            if r.phase == .waiting && pipeline.source == .camera && !editROI && !opt.showSteps {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L("① 按 AUTO，点画面对焦，画面合适后按 LOCK"))
                     Text(L("② 点 ROI 画分析框（可多个，也可画参考框）"))

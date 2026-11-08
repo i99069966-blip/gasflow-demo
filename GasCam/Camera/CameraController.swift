@@ -147,6 +147,8 @@ final class CameraController: NSObject, ObservableObject {
     }
     /// AUTO could not reach the target ("光线不足" …). nil = fine.
     @Published var autoWarning: String?
+    /// The phone is hot: iOS may dim the torch, the baseline may drift. nil = fine.
+    @Published var thermalWarning: String?
     /// Values frozen by the last LOCK, e.g. "ISO 100 · 1/120 · 闪光 45% · 5200K".
     @Published var lockSummary: String?
     /// AUTO aims the brightest 2 % of the analysed pixels (brightest channel) at this level (0–255).
@@ -162,6 +164,11 @@ final class CameraController: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            self?.updateThermal()
+        }
+        updateThermal()
         let d = UserDefaults.standard
         if let r = d.string(forKey: "cam.resolution"), let res = VideoResolution(rawValue: r) {
             resolution = res
@@ -635,6 +642,15 @@ final class CameraController: NSObject, ObservableObject {
             self.publishDesired()
         }
         onSettingsChanged?()
+    }
+
+    private func updateThermal() {
+        switch ProcessInfo.processInfo.thermalState {
+        case .serious, .critical:
+            thermalWarning = L("手机发热：闪光灯可能被系统调暗，基线可能漂移")
+        default:
+            thermalWarning = nil
+        }
     }
 
     /// Is `seconds` a whole number of light-flicker periods (no flicker under mains lighting)?

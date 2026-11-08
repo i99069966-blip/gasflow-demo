@@ -35,6 +35,10 @@ struct DisplayOptions: Equatable, Codable {
     var showColorBar = true
     /// Keep the last arrow (dashed) after the gas has gone.
     var keepLastResult = false
+    /// HEAT / FLOW / ARRIVAL on black: only the gas response is visible.
+    var blackBackground = false
+    /// Experiment step bar (camera mode).
+    var showSteps = true
 }
 
 extension DisplayOptions {
@@ -52,7 +56,8 @@ extension DisplayOptions {
         get(.showHotspot, &showHotspot); get(.showChart, &showChart); get(.chartMode, &chartMode)
         get(.chartWindow, &chartWindow); get(.videoChartWindow, &videoChartWindow)
         get(.chartShowGB, &chartShowGB); get(.showAudioMeter, &showAudioMeter); get(.showColorBar, &showColorBar)
-        get(.keepLastResult, &keepLastResult)
+        get(.keepLastResult, &keepLastResult); get(.blackBackground, &blackBackground)
+        get(.showSteps, &showSteps)
     }
 }
 
@@ -77,7 +82,7 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
     private var optionsVersion = 0
     private var drawnOptionsVersion = -1
 
-    private let falseColorCube: Data = PreviewRenderer.makeCube(dimension: 32, map: PreviewRenderer.falseColor)
+    private let falseColorCube: Data = PreviewRenderer.makeCubeMax(dimension: 32, map: PreviewRenderer.falseColor)
     private var zebraCube: Data?
     private var zebraCubeLevel: Float = -1
     private var peakingCube: Data?
@@ -169,13 +174,18 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
         var img = f
         let opt = options
 
-        if includeAssists && opt.falseColor {
+        // black background: only the gas response is shown (HEAT / FLOW / ARRIVAL)
+        let black = opt.blackBackground && opt.overlay != .live && o != nil
+        if black {
+            img = CIImage(color: CIColor(red: 0, green: 0, blue: 0)).cropped(to: extent)
+        }
+        if includeAssists && opt.falseColor && !black {
             img = applyCube(img, falseColorCube, dimension: 32)
         }
         if includeAssists && opt.zebra {
             if zebraCubeLevel != opt.zebraLevel || zebraCube == nil {
                 let lvl = opt.zebraLevel
-                zebraCube = Self.makeCube(dimension: 32) { y in y >= lvl ? (1, 1, 1) : (0, 0, 0) }
+                zebraCube = Self.makeCubeMax(dimension: 32) { y in y >= lvl ? (1, 1, 1) : (0, 0, 0) }
                 zebraCubeLevel = lvl
             }
             if let cube = zebraCube {
@@ -244,6 +254,27 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
 
     // MARK: Cubes
 
+    /// Builds a colour cube that maps the brightest channel (sRGB-encoded) through `map`
+    /// (a pixel clips as soon as one channel clips, so exposure aids look at the maximum).
+    static func makeCubeMax(dimension n: Int, map: (Float) -> (Float, Float, Float)) -> Data {
+        var data = [Float](repeating: 0, count: n * n * n * 4)
+        var i = 0
+        let d = Float(n - 1)
+        for b in 0..<n {
+            for g in 0..<n {
+                for r in 0..<n {
+                    let c = map(Float(max(r, g, b)) / d)
+                    data[i] = c.0
+                    data[i + 1] = c.1
+                    data[i + 2] = c.2
+                    data[i + 3] = 1
+                    i += 4
+                }
+            }
+        }
+        return data.withUnsafeBufferPointer { Data(buffer: $0) }
+    }
+
     /// Builds a colour cube that maps Rec.709 luma (of sRGB-encoded values) through `map`.
     static func makeCube(dimension n: Int, map: (Float) -> (Float, Float, Float)) -> Data {
         var data = [Float](repeating: 0, count: n * n * n * 4)
@@ -265,15 +296,14 @@ final class PreviewRenderer: NSObject, MTKViewDelegate {
         return data.withUnsafeBufferPointer { Data(buffer: $0) }
     }
 
-    /// ARRI-style false colour (IRE bands) with grey elsewhere.
+    /// Measurement false colour on the brightest channel (same zones as the histogram and AUTO):
+    /// purple < 10 % too dark · grey middle · green 60–90 % good · yellow 90–97 % nearly clipped · red ≥ 97 % clipped.
     static func falseColor(_ y: Float) -> (Float, Float, Float) {
         switch y {
-        case ..<0.025: return (0.55, 0.0, 0.75)       // purple: crushed blacks
-        case ..<0.04: return (0.1, 0.35, 1.0)         // blue: near black
-        case 0.38..<0.42: return (0.1, 0.85, 0.2)     // green: 18 % grey
-        case 0.52..<0.56: return (1.0, 0.45, 0.7)     // pink: one stop over grey / skin
-        case 0.97..<0.99: return (1.0, 0.95, 0.0)     // yellow: near clipping
-        case 0.99...: return (1.0, 0.0, 0.0)          // red: clipped
+        case ..<0.10: return (0.55, 0.0, 0.75)
+        case 0.60..<0.90: return (0.15, 0.80, 0.30)
+        case 0.90..<0.97: return (1.0, 0.90, 0.0)
+        case 0.97...: return (1.0, 0.0, 0.0)
         default:
             let g = 0.15 + 0.6 * y
             return (g, g, g)

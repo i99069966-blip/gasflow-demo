@@ -367,26 +367,38 @@ struct GasQuickPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ValueSlider(label: L("基线时长"), value: $pipeline.params.baselineSeconds, range: 0.1...10) {
+            ValueSlider(label: L("基线时长"), value: $pipeline.params.baselineSeconds, range: 0.1...10, help: .baselineSeconds) {
                 String(format: "%.2f s", $0)
             }
             BaselineFramesRow()
-            ValueSlider(label: L("检测阈值"), value: $pipeline.params.minPercent, range: 0.2...10) {
+            if case .file = pipeline.source, !pipeline.channelReport.isEmpty {
+                HStack(spacing: 0) {
+                    Text(L("通道信噪比") + "：" + pipeline.channelReport.map { "\($0.shortName) \(Int($0.snr.rounded()))" }
+                        .joined(separator: " · "))
+                        .font(Theme.mono(11)).foregroundStyle(.gray)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    InfoButton(.channel)
+                }
+            }
+            ValueSlider(label: L("检测阈值"), value: $pipeline.params.minPercent, range: 0.2...10, help: .threshold) {
                 String(format: "%.1f%%", $0)
             }
             Toggle(isOn: $pipeline.params.autoScale) {
-                Text(L("自动色标")).font(Theme.mono(11)).foregroundStyle(.gray)
+                HStack(spacing: 0) {
+                    Text(L("自动色标")).font(Theme.mono(11)).foregroundStyle(.gray)
+                    InfoButton(.autoScale)
+                }
             }
             .tint(Theme.accent)
             if !pipeline.params.autoScale {
-                ValueSlider(label: L("色标上限"), value: $pipeline.params.displayMaxPercent, range: 1...40) {
+                ValueSlider(label: L("色标上限"), value: $pipeline.params.displayMaxPercent, range: 1...40, help: .displayMax) {
                     String(format: "%.0f%%", $0)
                 }
             }
-            ValueSlider(label: L("帧差间隔"), value: $pipeline.params.flowLagSeconds, range: 0.05...1.5) {
+            ValueSlider(label: L("帧差间隔"), value: $pipeline.params.flowLagSeconds, range: 0.05...1.5, help: .flowLag) {
                 String(format: "%.2f s", $0)
             }
-            ValueSlider(label: L("帧差色标"), value: $pipeline.params.flowScalePercent, range: 0.5...10) {
+            ValueSlider(label: L("帧差色标"), value: $pipeline.params.flowScalePercent, range: 0.5...10, help: .flowScale) {
                 String(format: "%.1f%%", $0)
             }
             Text(L("FLOW = 现在与“帧差间隔”之前相比：红 = 信号正在下降（气体进来），蓝 = 信号在恢复（气体离开）。"))

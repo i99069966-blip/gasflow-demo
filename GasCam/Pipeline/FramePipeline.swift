@@ -28,6 +28,8 @@ final class FramePipeline: ObservableObject {
     @Published private(set) var scanProgress: Double = 0
     /// Video: heat-map scale for the whole file (known after the scan and a baseline). nil = not yet.
     @Published private(set) var videoScale: Float?
+    /// Video: signal-to-noise of each candidate channel (best first). Empty = not known yet / no clear change.
+    @Published private(set) var channelReport: [ChannelScore] = []
     /// Video mode: when the baseline was taken and when gas first arrived (video seconds).
     @Published private(set) var marks = VideoMarks()
     /// While the user drags the progress bar: the time under the finger.
@@ -427,6 +429,7 @@ final class FramePipeline: ObservableObject {
         scanCoarse = CoarseScan()
         videoCurve = []
         videoScale = nil
+        channelReport = []
         scanProgress = 0
         marks = VideoMarks()
         scrubTime = nil
@@ -618,6 +621,44 @@ final class FramePipeline: ObservableObject {
             return o
         }
         computeVideoScale()
+        channelReport = Self.channelScores(samples: scanRaw, marks: m)
+    }
+
+    /// Which colour channel shows the gas best: for every region (and all regions together) the
+    /// largest change after the baseline divided by the frame-to-frame noise during the baseline.
+    static func channelScores(samples: [ChartSample], marks m: VideoMarks) -> [ChannelScore] {
+        guard let b0 = m.baselineStart, let b1 = m.baselineEnd else { return [] }
+        let base = samples.filter { $0.t >= b0 - 1e-6 && $0.t <= b1 + 1e-6 }
+        let after = samples.filter { $0.t > b1 }
+        guard base.count >= 5, after.count >= 5 else { return [] }
+        let nReg = samples.first?.regions.count ?? 0
+        let candidates: [SignalChannel] = [.red, .green, .blue, .redChroma]
+        var out: [ChannelScore] = []
+        for ch in candidates {
+            var best = ChannelScore(channel: ch, snr: 0, peakPercent: 0)
+            for series in -1..<nReg {
+                func value(_ s: ChartSample) -> Float? {
+                    if series < 0 { return ch.value(r: s.r, g: s.g, b: s.b) }
+                    guard series < s.regions.count else { return nil }
+                    let c = s.regions[series]
+                    return ch.value(r: c.r, g: c.g, b: c.b)
+                }
+                let bv = base.compactMap(value)
+                guard bv.count >= 5 else { continue }
+                let mu = bv.reduce(0, +) / Float(bv.count)
+                guard mu > 0.5 else { continue }
+                let varSum = bv.reduce(Float(0)) { $0 + ($1 - mu) * ($1 - mu) }
+                let sd = max((varSum / Float(bv.count - 1)).squareRoot(), mu * 1e-5)
+                var peak: Float = 0
+                for s in after { if let v = value(s) { peak = max(peak, abs(v - mu)) } }
+                let snr = peak / sd
+                if snr.isFinite && snr > best.snr { best = ChannelScore(channel: ch, snr: snr, peakPercent: 100 * peak / mu) }
+            }
+            out.append(best)
+        }
+        out.sort { $0.snr > $1.snr }
+        guard let top = out.first, top.snr >= 5 else { return [] }
+        return out
     }
 
     /// One heat-map scale for the whole video: 99th-percentile response of every frame after the
@@ -967,7 +1008,7 @@ enum ResultDrawing {
                                      withAttributes: [.font: font, .foregroundColor: UIColor.white])
         }
         UIGraphicsPopContext()
-        let roi = regions.bounds
+        drawSummary(in: ctx, size: size, regions: regions, result: r)
         guard let s = r.source ?? r.lastSource else { return }
         let e = pt(s.earliest), c = pt(s.centroid), src = pt(s.sourcePoint)
         if s.mode == .direction {
@@ -995,17 +1036,51 @@ enum ResultDrawing {
         ctx.move(to: CGPoint(x: src.x - rr, y: src.y - rr)); ctx.addLine(to: CGPoint(x: src.x + rr, y: src.y + rr))
         ctx.move(to: CGPoint(x: src.x + rr, y: src.y - rr)); ctx.addLine(to: CGPoint(x: src.x - rr, y: src.y + rr))
         ctx.strokePath()
+    }
 
-        let text = String(format: "source %@ %.0f°  conf %.2f  first contact (%.2f, %.2f)",
-                          s.mode == .direction ? "dir" : "point", s.angleDeg, s.confidence,
-                          s.earliest.x, s.earliest.y)
+    /// Text block at the bottom: first arrival, arrow, region order.
+    private static func drawSummary(in ctx: CGContext, size: CGSize, regions: AnalysisRegions, result r: GasFrameResult) {
+        var lines: [String] = []
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        lines.append("GasCam \(CrashReporter.appVersion) · \(f.string(from: Date()))")
+        if let s = r.source ?? r.lastSource {
+            lines.append(String(format: L("首次到达：基线后 %.2f s"), s.firstArrival))
+            if s.mode == .direction {
+                lines.append(String(format: L("气源方向：%.0f°（0° = 右，90° = 上） · 置信度 %.2f"), s.angleDeg, s.confidence))
+            } else {
+                lines.append(String(format: L("气源：从正上方扩散 · 置信度 %.2f"), s.confidence))
+            }
+            lines.append(String(format: L("最早接触点：(%.2f, %.2f)"), s.earliest.x, s.earliest.y))
+        } else {
+            lines.append(L("没有检测到气体"))
+        }
+        let order = r.regions.enumerated().compactMap { k, g in g.arrivalTime.map { (k, $0) } }.sorted { $0.1 < $1.1 }
+        if r.regions.count > 1 {
+            if order.isEmpty {
+                lines.append(L("区域到达顺序：还没有区域到达"))
+            } else {
+                let t0 = order[0].1
+                let parts = order.map { k, t in t == t0 ? "\(k + 1)" : String(format: "%d (+%.2f s)", k + 1, t - t0) }
+                lines.append(L("区域到达顺序：") + parts.joined(separator: " → "))
+            }
+        }
+        lines.append(String(format: L("最大响应 %.1f%% · 色标 %.1f%%"), r.maxResponse, r.displayScale))
+        let fontSize = max(13, size.width / 46)
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.monospacedSystemFont(ofSize: max(14, size.width / 40), weight: .semibold),
+            .font: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .semibold),
             .foregroundColor: UIColor.white,
-            .backgroundColor: UIColor.black.withAlphaComponent(0.6),
         ]
+        let text = lines.joined(separator: "\n") as NSString
+        let maxW = size.width - 24
+        let box = text.boundingRect(with: CGSize(width: maxW, height: size.height), options: [.usesLineFragmentOrigin],
+                                    attributes: attrs, context: nil)
+        let origin = CGPoint(x: 12, y: size.height - box.height - 16)
         UIGraphicsPushContext(ctx)
-        (text as NSString).draw(at: CGPoint(x: 12, y: roi.y1 * size.height + 12), withAttributes: attrs)
+        ctx.setFillColor(UIColor.black.withAlphaComponent(0.65).cgColor)
+        ctx.fill(CGRect(x: origin.x - 6, y: origin.y - 6, width: min(maxW, box.width) + 12, height: box.height + 12))
+        text.draw(with: CGRect(origin: origin, size: CGSize(width: maxW, height: box.height + 2)),
+                  options: [.usesLineFragmentOrigin], attributes: attrs, context: nil)
         UIGraphicsPopContext()
     }
 }
@@ -1119,5 +1194,24 @@ enum PhotoLinks {
         var d = (UserDefaults.standard.dictionary(forKey: key) as? [String: String]) ?? [:]
         d[name] = id
         UserDefaults.standard.set(d, forKey: key)
+    }
+}
+
+struct ChannelScore: Equatable {
+    let channel: SignalChannel
+    /// Largest change after the baseline ÷ frame-to-frame noise during the baseline (region mean).
+    let snr: Float
+    /// Largest change, %.
+    let peakPercent: Float
+
+    /// Short channel name for the report.
+    var shortName: String {
+        switch channel {
+        case .red: return "R"
+        case .green: return "G"
+        case .blue: return "B"
+        case .luma: return "Y"
+        case .redChroma: return "r"
+        }
     }
 }

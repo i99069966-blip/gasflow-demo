@@ -39,7 +39,12 @@ struct TopBar: View {
 
     private var infoRow: some View {
         HStack(spacing: 8) {
-            if let w = camera.autoWarning, !camera.isFullyLocked {
+            if let w = camera.thermalWarning {
+                Label(w, systemImage: "thermometer.high")
+                    .foregroundStyle(.red)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            } else if let w = camera.autoWarning, !camera.isFullyLocked {
                 Label(w, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .lineLimit(1)
