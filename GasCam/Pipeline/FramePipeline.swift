@@ -121,6 +121,9 @@ final class FramePipeline: ObservableObject {
     private var paramsDirty = false
     private var regionsDirty = false
     private var procVideoScale: Float?
+    private var refBaseSum: Float = 0
+    private var refBaseN = 0
+    private var refBaseValue: Float?
     private var pendingRebaseline = false
     private var pendingResetArrivals = false
     private var armed = false
@@ -570,12 +573,15 @@ final class FramePipeline: ObservableObject {
             return now > 1 ? a / now : 1
         }
         let nReg = scanRaw.first?.regions.count ?? 0
+        var refBox: Float = 0          // reference box at the baseline (uncorrected)
         var ref: Float = 0
         var regRef = [Float](repeating: 0, count: nReg)
         if let b0 = m.baselineStart, let b1 = m.baselineEnd {
             let base = scanRaw.filter { $0.t >= b0 - 1e-6 && $0.t <= b1 + 1e-6 }
             if !base.isEmpty {
+                var nRef: Float = 0
                 for s in base {
+                    if let rf = s.ref { refBox += ch.value(r: rf.r, g: rf.g, b: rf.b); nRef += 1 }
                     let f = factor(s)
                     ref += ch.value(r: s.r, g: s.g, b: s.b) * f
                     for k in 0..<min(nReg, s.regions.count) {
@@ -584,6 +590,7 @@ final class FramePipeline: ObservableObject {
                     }
                 }
                 ref /= Float(base.count)
+                refBox = nRef > 0 ? refBox / nRef : 0
                 for k in 0..<nReg { regRef[k] /= Float(base.count) }
             }
         }
@@ -595,6 +602,9 @@ final class FramePipeline: ObservableObject {
                 } else {
                     o.phase = 1
                 }
+            }
+            if refBox > 1 && o.phase >= 2, let rf = s.ref {
+                o.refResponse = pol(100 * (ch.value(r: rf.r, g: rf.g, b: rf.b) - refBox) / refBox)
             }
             if ref > 0 && o.phase >= 2 {
                 let f = factor(s)
@@ -756,6 +766,8 @@ final class FramePipeline: ObservableObject {
             an.update(regions: procRegions)
             procMasks = RegionMasks(regions: procRegions, width: an.width, height: an.height)
             regionsDirty = false
+            refBaseValue = nil
+            refBaseN = 0
         }
         an.videoMode = !fromCamera
         an.videoScale = procVideoScale
@@ -800,8 +812,27 @@ final class FramePipeline: ObservableObject {
         for k in 0..<means.regions.count { r.regions[k].raw = means.regions[k] }
         if r.displayScale <= 0 { r.displayScale = procParams.autoScale ? procParams.autoScaleFloor : procParams.displayMaxPercent }
 
+        // reference box: change since the baseline (shows what the correction removes)
+        if let rf = means.reference {
+            let v = procParams.channel.value(r: rf.r, g: rf.g, b: rf.b)
+            switch r.phase {
+            case .baseline:
+                if r.baselineFrames <= 1 { refBaseSum = 0; refBaseN = 0 }
+                refBaseSum += v
+                refBaseN += 1
+                refBaseValue = nil
+            case .monitoring, .detected:
+                if refBaseValue == nil && refBaseN > 0 { refBaseValue = refBaseSum / Float(refBaseN) }
+                if let b = refBaseValue, b > 1 { r.refResponse = procParams.polarity.apply(100 * (v - b) / b) }
+            case .waiting:
+                refBaseValue = nil
+                refBaseN = 0
+            }
+        }
+
         if fromCamera {
-            camera.autoExposureStep(level: means.union.maxChannel)
+            let m = masks.brightness(bgra: ds.pixels, bytesPerRow: ds.bytesPerRow)
+            camera.autoExposureStep(p98: m.p98, saturated: m.saturated)
         } else {
             // remember when the baseline was taken / gas arrived, in video time
             var changed = false
@@ -842,7 +873,7 @@ final class FramePipeline: ObservableObject {
             }
             chartBuf.append(ChartSample(t: tc, r: mr, g: mg, b: mb, response: r.meanResponse, phase: code,
                                         regions: means.regions, regionResponse: r.regions.map { $0.meanResponse },
-                                        ref: means.reference))
+                                        ref: means.reference, refResponse: r.refResponse))
             lastChartT = tc
             if let cut = chartBuf.firstIndex(where: { tc - $0.t <= 125 }), cut > 0 {
                 chartBuf.removeFirst(cut)
@@ -1018,7 +1049,8 @@ struct CoarseScan {
                         sum += channel.value(r: Float(p[2]), g: Float(p[1]), b: Float(p[0]))
                     }
                 }
-                data.append(UInt16(max(0, min(65535, sum * inv * 100))))
+                let q = sum * inv * 100
+                data.append(q.isFinite ? UInt16(max(0, min(65535, q))) : 0)
             }
         }
         times.append(time)

@@ -36,7 +36,7 @@ struct ControlPanel: View {
             }
             caption(L("帧率 (fps)"))
             chipsRow(camera.supportedFrameRates.map { "\(Int($0))" },
-                     selected: "\(Int(camera.frameRate))", disabled: pipeline.isRecording) { s in
+                     selected: "\(camera.frameRate.safeInt)", disabled: pipeline.isRecording) { s in
                 if let f = Double(s) { camera.setFrameRate(f) }
             }
         }
@@ -87,7 +87,7 @@ struct ControlPanel: View {
                 }
             }
             Text(camera.shutterAuto
-                 ? L("快门自动：按 LOCK 时会改到最近的防频闪值（绿色），并用 ISO 保持亮度。")
+                 ? L("快门 AUTO：固定为不超过 1/帧率的最长防频闪值（绿色）；只有画面太亮时才缩短。")
                  : L("绿色 = 不会被灯光频闪影响的快门。快门最长 = 1/帧率。"))
                 .font(Theme.mono(10)).foregroundStyle(.gray)
             if camera.exposureAuto {
@@ -103,13 +103,13 @@ struct ControlPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 PillButton(text: "AUTO", selected: camera.exposureAuto) { camera.setExposureAuto(!camera.exposureAuto) }
-                Text("ISO \(Int(camera.iso.rounded()))").font(Theme.mono(13, .semibold))
+                Text("ISO \(camera.iso.safeInt)").font(Theme.mono(13, .semibold))
                 Spacer()
             }
-            Text(L("自动：按分析框的亮度调节（目标约 70%）。"))
+            Text(String(format: L("AUTO：框内最亮的 2%% 像素调到约 85%%；先用闪光灯，不够再升 ISO（最高 %d）。"), Int(camera.autoISOCap)))
                 .font(Theme.mono(10)).foregroundStyle(.gray)
             chipsRow(CameraPresets.isoValues.filter { camera.isoRange.contains($0) }.map { "\(Int($0))" },
-                     selected: camera.exposureAuto ? "" : "\(Int(camera.iso.rounded()))") { s in
+                     selected: camera.exposureAuto ? "" : "\(camera.iso.safeInt)") { s in
                 if let v = Float(s) { camera.setISO(v) }
             }
             ValueSlider(label: "ISO", value: Binding(get: { camera.iso }, set: { camera.setISO($0) }),
@@ -209,7 +209,7 @@ struct ControlPanel: View {
             if camera.hasTorch {
                 HStack(spacing: 6) {
                     PillButton(text: "AUTO", selected: camera.torchAuto) { camera.setTorchAuto(!camera.torchAuto) }
-                    Text(camera.torchAuto ? L("自动：按分析框亮度调节（最高 70%），BASELINE / LOCK 时固定") : L("手动"))
+                    Text(camera.torchAuto ? String(format: L("自动：按分析框亮度调节（最高 %d%%），LOCK / BASELINE 时固定"), Int((camera.autoTorchLimit * 100).rounded())) : L("手动"))
                         .font(Theme.mono(10)).foregroundStyle(.gray)
                     Spacer()
                 }

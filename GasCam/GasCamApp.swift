@@ -7,6 +7,7 @@ struct GasCamApp: App {
     @StateObject private var language = LanguageSettings.shared
 
     init() {
+        CrashReporter.shared.start()
         let cam = CameraController()
         _camera = StateObject(wrappedValue: cam)
         _pipeline = StateObject(wrappedValue: FramePipeline(camera: cam))

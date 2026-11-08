@@ -381,6 +381,7 @@ final class GasAnalyzer {
         result.source = currentSource
         result.lastSource = lastSource
         result.phase = order.isEmpty ? .monitoring : .detected
+        result.gasPresent = !order.isEmpty && result.activeFraction >= 0.002
         return result
     }
 
@@ -536,7 +537,7 @@ final class GasAnalyzer {
         var n: Int32 = 0
         for i in 0..<count where valid[i] != 0 {
             let v = resp[i]
-            let bin = v <= 0 ? 0 : min(nb, Int(v * 20))
+            let bin = v.isFinite && v > 0 ? Int(min(Float(nb), v * 20)) : 0
             pctHist[bin] += 1
             n += 1
         }

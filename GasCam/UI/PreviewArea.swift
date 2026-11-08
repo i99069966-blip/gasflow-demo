@@ -70,9 +70,9 @@ struct PreviewOverlay: View {
             }
 
             if opt.showArrow {
-                if let s = r.source {
+                if let s = r.source, r.gasPresent {
                     SourceMarker(source: s, size: size, ghost: false)
-                } else if let s = r.lastSource {
+                } else if opt.keepLastResult, let s = r.source ?? r.lastSource {
                     SourceMarker(source: s, size: size, ghost: true)
                 }
             }

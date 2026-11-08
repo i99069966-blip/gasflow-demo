@@ -127,6 +127,47 @@ enum RecordingStore {
         }
     }
 
+    // MARK: Delete
+
+    /// Deletes the recordings' .mov / .mp4 + .json + .csv; optionally also their Photos copies
+    /// (iOS asks the user to confirm). Main-thread completion with a message.
+    static func delete(_ items: [Item], includePhotos: Bool, completion: @escaping (String) -> Void) {
+        func done(_ m: String) { DispatchQueue.main.async { completion(m) } }
+        let fm = FileManager.default
+        var names: [String] = []
+        for it in items {
+            let base = it.url.deletingPathExtension()
+            try? fm.removeItem(at: it.url)
+            for side in ["json", "csv"] { try? fm.removeItem(at: base.appendingPathExtension(side)) }
+            cache.removeObject(forKey: it.url as NSURL)
+            names.append(it.url.lastPathComponent)
+        }
+        let n = items.count
+        guard includePhotos else {
+            names.forEach { PhotoLinks.set(nil, for: $0) }
+            done(String(format: L("已删除 %d 段录像"), n))
+            return
+        }
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+            guard status == .authorized || status == .limited else {
+                done(L("文件已删除。没有相册的读取权限，相册里的没有删除。"))
+                return
+            }
+            let assets = names.compactMap { findAsset(fileName: $0) }
+            names.forEach { PhotoLinks.set(nil, for: $0) }
+            guard !assets.isEmpty else {
+                done(L("文件已删除。相册里没有找到对应的录像。"))
+                return
+            }
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.deleteAssets(assets as NSArray)
+            }, completionHandler: { ok, _ in
+                done(ok ? String(format: L("已删除 %d 段录像（含相册）"), n)
+                        : L("文件已删除。相册里的没有删除（已取消）。"))
+            })
+        }
+    }
+
     private static func findAsset(fileName: String) -> PHAsset? {
         if let id = PhotoLinks.id(for: fileName),
            let a = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject {

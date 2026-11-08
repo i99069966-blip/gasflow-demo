@@ -255,6 +255,12 @@ struct LiveChart: View {
                 }
             }
         }
+        let showRef = mode == .response && vis.contains { $0.refResponse != nil }
+        if showRef {
+            for p in vis where p.phase >= 2 {
+                if let v = p.refResponse { lo = min(lo, v); hi = max(hi, v) }
+            }
+        }
         if lo > hi { lo = 0; hi = 1 }
         if mode == .response { lo = min(lo, -0.5); hi = max(hi, 2) }
         let minSpan: Float = mode == .raw ? 2 : 1
@@ -335,6 +341,13 @@ struct LiveChart: View {
             ctx.stroke(curve({ $0.r }), with: .color(Color(red: 1, green: 0.35, blue: 0.3)), lineWidth: 1.6)
         } else {
             ctx.stroke(curve({ $0.phase >= 2 ? $0.response : nil }), with: .color(Theme.accent), lineWidth: 1.6)
+        }
+        // reference box (white dashed): what the light / exposure alone did
+        if showRef {
+            ctx.stroke(curve({ $0.phase >= 2 ? $0.refResponse : nil }), with: .color(.white.opacity(0.85)),
+                       style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
+            ctx.draw(Text("REF").font(Theme.mono(8, .bold)).foregroundColor(.white),
+                     at: CGPoint(x: size.width - 2, y: 6), anchor: .trailing)
         }
         // playhead (video mode)
         if let ph = playhead, ph >= tStart, ph <= tEnd {

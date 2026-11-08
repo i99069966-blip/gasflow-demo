@@ -13,8 +13,8 @@ struct TopBar: View {
                 HStack(spacing: 2) {
                     chip("FPS", fpsText, kind: .fps, auto: false)
                     chip("SHUTTER", camera.shutter.shutterLabel, kind: .shutter, auto: camera.shutterAuto)
-                    chip("ISO", "\(Int(camera.iso.rounded()))", kind: .iso, auto: camera.exposureAuto)
-                    chip("WB", "\(Int(camera.temperature.rounded()))K", kind: .wb, auto: camera.wbAuto)
+                    chip("ISO", "\(camera.iso.safeInt)", kind: .iso, auto: camera.exposureAuto)
+                    chip("WB", "\(camera.temperature.safeInt)K", kind: .wb, auto: camera.wbAuto)
                     chip("FOCUS", String(format: "%.2f", camera.lensPosition), kind: .focus, auto: camera.focusAuto)
                 }
                 infoRow
@@ -39,7 +39,12 @@ struct TopBar: View {
 
     private var infoRow: some View {
         HStack(spacing: 8) {
-            if camera.isFullyLocked, let s = camera.lockSummary, !s.isEmpty {
+            if let w = camera.autoWarning, !camera.isFullyLocked {
+                Label(w, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            } else if camera.isFullyLocked, let s = camera.lockSummary, !s.isEmpty {
                 Label(s, systemImage: "lock.fill")
                     .foregroundStyle(Theme.accent)
                     .lineLimit(1)

@@ -33,6 +33,8 @@ struct DisplayOptions: Equatable, Codable {
     var showAudioMeter = true
     /// Colour bar with the current scale on the preview.
     var showColorBar = true
+    /// Keep the last arrow (dashed) after the gas has gone.
+    var keepLastResult = false
 }
 
 extension DisplayOptions {
@@ -50,6 +52,7 @@ extension DisplayOptions {
         get(.showHotspot, &showHotspot); get(.showChart, &showChart); get(.chartMode, &chartMode)
         get(.chartWindow, &chartWindow); get(.videoChartWindow, &videoChartWindow)
         get(.chartShowGB, &chartShowGB); get(.showAudioMeter, &showAudioMeter); get(.showColorBar, &showColorBar)
+        get(.keepLastResult, &keepLastResult)
     }
 }
 

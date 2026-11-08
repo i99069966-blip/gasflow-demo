@@ -14,6 +14,7 @@
 		5567AD08CA019E4EBC8E2236 /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62D26DC40051CAF58627FD9D /* CameraController.swift */; };
 		7A106B3507F5DE0FA3DCDA4B /* CameraSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD196AC409C640F44479847 /* CameraSettings.swift */; };
 		400895057A7FAFCA01674937 /* VideoRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC9D2240D7D485E772B9A38 /* VideoRecorder.swift */; };
+		0285EEDAC29A3072ADC87B8D /* CrashReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68FECD15DB2763B5B01C525 /* CrashReporter.swift */; };
 		FBAC22C94F97636269C68529 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14B5EEFF74B58687C026C37C /* Localization.swift */; };
 		546152095525B8FCE608D693 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98A0884D211F83B226E20756 /* Strings.swift */; };
 		3C8B40F6BD1245264670A64D /* FramePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B78324BC45E88E6CEC6A2B /* FramePipeline.swift */; };
@@ -58,6 +59,7 @@
 		9DFF4B63DD6588FE031C961D /* FrameDownsampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameDownsampler.swift; sourceTree = "<group>"; };
 		A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArea.swift; sourceTree = "<group>"; };
 		AC18D468BADB09EC38EBD5CC /* ChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartView.swift; sourceTree = "<group>"; };
+		B68FECD15DB2763B5B01C525 /* CrashReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReporter.swift; sourceTree = "<group>"; };
 		BDB45C5FEE899B997B0EF65C /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
 		DBD196AC409C640F44479847 /* CameraSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSettings.swift; sourceTree = "<group>"; };
 		DD33CFDE59C3591B408BAF09 /* RecordingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingStore.swift; sourceTree = "<group>"; };
@@ -152,6 +154,14 @@
 			path = Analysis;
 			sourceTree = "<group>";
 		};
+		741F75DD38F63C85F1A9C967 /* Diagnostics */ = {
+			isa = PBXGroup;
+			children = (
+				B68FECD15DB2763B5B01C525 /* CrashReporter.swift */,
+			);
+			path = Diagnostics;
+			sourceTree = "<group>";
+		};
 		A6F818FF8CF305AB1D871DB7 /* UI */ = {
 			isa = PBXGroup;
 			children = (
@@ -174,6 +184,7 @@
 			children = (
 				6E00B4CFC291541ACDA57DB7 /* Analysis */,
 				1214AF78C28F29A64F7F3099 /* Camera */,
+				741F75DD38F63C85F1A9C967 /* Diagnostics */,
 				4C5A617557D43614E4AE55C0 /* Localization */,
 				2C25B656F0419F9DB4765C99 /* Pipeline */,
 				0CCC2DE9244B69A951CBC6EE /* Playback */,
@@ -261,6 +272,7 @@
 				5567AD08CA019E4EBC8E2236 /* CameraController.swift in Sources */,
 				7A106B3507F5DE0FA3DCDA4B /* CameraSettings.swift in Sources */,
 				400895057A7FAFCA01674937 /* VideoRecorder.swift in Sources */,
+				0285EEDAC29A3072ADC87B8D /* CrashReporter.swift in Sources */,
 				FBAC22C94F97636269C68529 /* Localization.swift in Sources */,
 				546152095525B8FCE608D693 /* Strings.swift in Sources */,
 				3C8B40F6BD1245264670A64D /* FramePipeline.swift in Sources */,
@@ -361,7 +373,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -381,7 +393,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = "jp.lab.lspr.GasCam";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -398,7 +410,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -418,7 +430,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = "jp.lab.lspr.GasCam";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

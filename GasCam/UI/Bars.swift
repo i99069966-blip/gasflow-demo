@@ -10,15 +10,18 @@ struct GasStatusBar: View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
                 phasePill(r)
-                if let s = r.source ?? r.lastSource {
+                if let s = r.gasPresent ? r.source : (pipeline.display.keepLastResult ? (r.source ?? r.lastSource) : nil) {
                     HStack(spacing: 4) {
                         Image(systemName: "location.north.fill")
                             .rotationEffect(.degrees(90 - s.angleDeg))
-                            .foregroundStyle(r.source == nil ? Color.gray : Color.white)
+                            .foregroundStyle(r.gasPresent ? Color.white : Color.gray)
                         Text(s.mode == .direction ? String(format: "%.0f°", s.angleDeg) : L("正上方"))
                         Text(String(format: "c%.2f", s.confidence)).foregroundStyle(.gray)
                     }
                     .font(Theme.mono(13, .semibold))
+                }
+                if r.refMean != nil {
+                    refBadge(r)
                 }
                 Spacer(minLength: 4)
                 Button { withAnimation(.easeOut(duration: 0.15)) { showGasPanel.toggle() } } label: {
@@ -66,6 +69,22 @@ struct GasStatusBar: View {
         .padding(.horizontal, 6)
     }
 
+    /// Reference box: correction factor (correction on) or its own change since the baseline (off).
+    private func refBadge(_ r: GasFrameResult) -> some View {
+        let text: String = {
+            if pipeline.params.useReference && r.phase != .waiting {
+                return String(format: "REF ×%.3f", r.refFactor)
+            }
+            if let v = r.refResponse { return String(format: "REF %+.2f%%", v) }
+            return "REF"
+        }()
+        return Text(text)
+            .font(Theme.mono(11, .semibold))
+            .foregroundStyle(pipeline.params.useReference ? Color.white : Color.gray)
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
+    }
+
     /// Regions in the order the gas reached them, with times relative to the first one.
     private func arrivalRow(_ stats: [RegionStat]) -> some View {
         let order = stats.enumerated().compactMap { k, s in s.arrivalTime.map { (k, $0) } }.sorted { $0.1 < $1.1 }
@@ -92,7 +111,7 @@ struct GasStatusBar: View {
                 return (r.baselineTarget > 0 ? String(format: L("基线 %d/%d帧"), r.baselineFrames, r.baselineTarget)
                                              : String(format: L("基线 %d%%"), Int(p * 100)), .blue)
             case .monitoring: return (L("监测中"), .green)
-            case .detected: return (L("检测到气体"), .red)
+            case .detected: return r.gasPresent ? (L("检测到气体"), .red) : (L("气体已离开"), .orange)
             }
         }()
         return HStack(spacing: 5) {
@@ -125,7 +144,7 @@ struct CameraBottomBar: View {
             Spacer(minLength: 0)
             VStack(spacing: 6) {
                 smallButton(lensLabel, selected: active == .lens) { toggle(.lens) }
-                smallButton(camera.torchLevel > 0 ? "☀︎\(Int(camera.torchLevel * 100))" : "☀︎OFF",
+                smallButton(camera.torchLevel > 0 ? "☀︎\((camera.torchLevel * 100).safeInt)" : "☀︎OFF",
                             selected: active == .torch) { toggle(.torch) }
             }
             Button { pipeline.toggleRecording() } label: {

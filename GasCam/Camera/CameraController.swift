@@ -31,6 +31,19 @@ final class CameraController: NSObject, ObservableObject {
     private var lastAutoStep: Double = 0
     /// Read on the video queue to skip work when nothing is automatic.
     private var autoLoopActive = false
+
+    /// AUTO loop state (sessionQueue).
+    private struct AutoState {
+        /// Measurements before this time still show the previous settings.
+        var settleUntil: Double = 0
+        /// (torch level, linear brightness per unit exposure) at up to two torch levels → torch model.
+        var points: [(t: Float, e: Float)] = []
+        var warning: String?
+    }
+    private var autoState = AutoState()
+    private var mainsQ: Double = 60
+    private var isoCapQ: Float = 800
+    private var torchCapQ: Float = 1
     /// Main thread: a user-initiated change that alters the image (analysis must re-baseline).
     var onSettingsChanged: (() -> Void)?
 
@@ -110,18 +123,34 @@ final class CameraController: NSObject, ObservableObject {
     @Published var torchAuto = false
     /// Mains frequency of the room lights (lights flicker at twice this).
     @Published var mainsHz: Double = 60 {
-        didSet { UserDefaults.standard.set(mainsHz, forKey: "cam.mainsHz") }
+        didSet {
+            UserDefaults.standard.set(mainsHz, forKey: "cam.mainsHz")
+            let v = mainsHz
+            sessionQueue.async { self.mainsQ = v; self.restartAuto() }
+        }
     }
-    /// LOCK moves an automatic shutter to the nearest flicker-free value (ISO keeps the brightness).
-    @Published var fixShutterOnLock = true {
-        didSet { UserDefaults.standard.set(fixShutterOnLock, forKey: "cam.fixShutterOnLock") }
+    /// Highest ISO the AUTO loop may use (manual ISO is not limited).
+    @Published var autoISOCap: Float = 800 {
+        didSet {
+            UserDefaults.standard.set(autoISOCap, forKey: "cam.autoISOCap")
+            let v = autoISOCap
+            sessionQueue.async { self.isoCapQ = v }
+        }
     }
+    /// Highest torch level the AUTO loop may use (0…1).
+    @Published var autoTorchLimit: Float = 1 {
+        didSet {
+            UserDefaults.standard.set(autoTorchLimit, forKey: "cam.autoTorchLimit")
+            let v = autoTorchLimit
+            sessionQueue.async { self.torchCapQ = v }
+        }
+    }
+    /// AUTO could not reach the target ("光线不足" …). nil = fine.
+    @Published var autoWarning: String?
     /// Values frozen by the last LOCK, e.g. "ISO 100 · 1/120 · 闪光 45% · 5200K".
     @Published var lockSummary: String?
-    /// Brightness the AUTO loop aims for: brightest channel of the regions, 0–255.
-    static let autoTarget: Float = 0.70 * 255
-    /// Upper limit of the torch while it is automatic.
-    static let autoTorchCap: Float = 0.70
+    /// AUTO aims the brightest 2 % of the analysed pixels (brightest channel) at this level (0–255).
+    static let autoTarget: Float = 0.85 * 255
     /// Microphone level (dBFS, −160…0) for the 声源 meter.
     @Published var audioLevel: Float = -160
     @Published var audioPeak: Float = -160
@@ -144,8 +173,13 @@ final class CameraController: NSObject, ObservableObject {
             desired.fps = f
         }
         let hz = d.double(forKey: "cam.mainsHz")
-        if hz == 50 || hz == 60 { mainsHz = hz }
-        if d.object(forKey: "cam.fixShutterOnLock") != nil { fixShutterOnLock = d.bool(forKey: "cam.fixShutterOnLock") }
+        if hz == 50 || hz == 60 { mainsHz = hz; mainsQ = hz }
+        let ic = d.float(forKey: "cam.autoISOCap")
+        if ic > 0 { autoISOCap = ic; isoCapQ = ic }
+        if d.object(forKey: "cam.autoTorchLimit") != nil {
+            let tl = d.float(forKey: "cam.autoTorchLimit")
+            autoTorchLimit = tl; torchCapQ = tl
+        }
     }
 
     // MARK: - Lifecycle
@@ -267,6 +301,7 @@ final class CameraController: NSObject, ObservableObject {
         applyFormat(dev)
         reapplyManual(dev)
         publishDeviceState(dev)
+        restartAuto()
     }
 
     private func applyConnectionSettings() {
@@ -538,6 +573,7 @@ final class CameraController: NSObject, ObservableObject {
             self.applyFormat(dev)
             self.reapplyManual(dev)
             self.publishDeviceState(dev)
+            self.restartAuto()
         }
         onSettingsChanged?()
     }
@@ -564,6 +600,7 @@ final class CameraController: NSObject, ObservableObject {
             self.desired.exposureAuto = auto
             self.desired.shutterAuto = auto
             self.applyExposure()
+            if auto { self.restartAuto() }
             self.publishDesired()
         }
         onSettingsChanged?()
@@ -620,8 +657,8 @@ final class CameraController: NSObject, ObservableObject {
         sessionQueue.async {
             if !auto, let dev = self.device {
                 let tt = dev.temperatureAndTintValues(for: dev.deviceWhiteBalanceGains)
-                self.desired.temperature = tt.temperature
-                self.desired.tint = tt.tint
+                if tt.temperature.isFinite { self.desired.temperature = tt.temperature }
+                if tt.tint.isFinite { self.desired.tint = tt.tint }
             }
             self.desired.wbAuto = auto
             self.applyWhiteBalance()
@@ -650,8 +687,8 @@ final class CameraController: NSObject, ObservableObject {
             let g = self.normalizedGains(dev.grayWorldDeviceWhiteBalanceGains, dev)
             let tt = dev.temperatureAndTintValues(for: g)
             self.desired.wbAuto = false
-            self.desired.temperature = tt.temperature
-            self.desired.tint = tt.tint
+            if tt.temperature.isFinite { self.desired.temperature = tt.temperature }
+            if tt.tint.isFinite { self.desired.tint = tt.tint }
             self.applyWhiteBalance()
             self.publishDesired()
         }
@@ -725,11 +762,7 @@ final class CameraController: NSObject, ObservableObject {
         sessionQueue.async {
             self.desired.torchAuto = enable
             self.autoLoopActive = enable || self.desired.exposureAuto
-            if enable && self.desired.torch < 0.02 {
-                self.desired.torch = 0.1
-                self.applyTorch()
-                self.publishDesired()
-            }
+            if enable { self.restartAuto() }
         }
         onSettingsChanged?()
     }
@@ -750,91 +783,200 @@ final class CameraController: NSObject, ObservableObject {
             self.desired.wbAuto = true
             self.desired.focusAuto = true
             self.desired.torchAuto = torch
-            if torch && self.desired.torch < 0.02 { self.desired.torch = 0.1 }
-            self.applyExposure()
             self.applyWhiteBalance()
             self.applyFocus()
-            self.applyTorch()
+            self.restartAuto()
             self.publishDesired()
         }
         onSettingsChanged?()
     }
 
-    /// AUTO control loop, called from the frame queue with the brightest channel (0–255) of the
-    /// analysis regions (whole frame when none is drawn). One small step every ~0.3 s.
-    ///  dark  : torch ↑ (up to 70 %) → shutter ↑ (up to 1/fps) → ISO ↑
-    ///  bright: ISO ↓ (down to minimum) → torch ↓ (→ off) → shutter ↓
-    func autoExposureStep(level: Float) {
-        guard autoLoopActive else { return }
+    /// AUTO control loop, called from the frame queue with the brightness of the analysed pixels:
+    /// `p98` = 98th percentile of the brightest channel (0–255), `saturated` = fraction ≥ 250.
+    func autoExposureStep(p98: Float, saturated: Float) {
+        guard autoLoopActive, p98.isFinite, saturated.isFinite else { return }
         let now = ProcessInfo.processInfo.systemUptime
-        guard now - lastAutoStep >= 0.3 else { return }
+        guard now - lastAutoStep >= 0.1 else { return }
         lastAutoStep = now
-        sessionQueue.async { self.runAutoStep(level: level) }
+        sessionQueue.async { self.runAutoStep(p98: p98, saturated: saturated, now: now) }
     }
 
-    private func runAutoStep(level: Float) {
-        guard let dev = device else { return }
+    /// (Re)start AUTO from a known state: shutter = longest flicker-free value (unless set by hand),
+    /// lowest ISO, torch off — the first measurement is then the ambient light alone. sessionQueue.
+    private func restartAuto() {
+        autoState = AutoState()
+        publishWarning(nil)
+        guard let dev = device, desired.exposureAuto || desired.torchAuto else { return }
+        let fmt = dev.activeFormat
+        if desired.exposureAuto {
+            if desired.shutterAuto { desired.shutter = homeShutter(fmt) }
+            desired.iso = fmt.minISO
+            applyExposure()
+        }
+        if desired.torchAuto && dev.hasTorch {
+            desired.torch = 0
+            applyTorch()
+        }
+        autoState.settleUntil = ProcessInfo.processInfo.systemUptime + 0.5
+        autoLoopActive = true
+        publishDesired()
+    }
+
+    /// Longest flicker-free shutter that fits in one frame (1/fps if none exists).
+    private func homeShutter(_ fmt: AVCaptureDevice.Format) -> Double {
+        let maxDur = min(fmt.maxExposureDuration.seconds, 1 / max(desired.fps, 1))
+        let period = 1 / (2 * mainsQ)
+        let k = (maxDur / period + 1e-6).rounded(.down)
+        return k >= 1 ? k * period : maxDur
+    }
+
+    private func publishWarning(_ w: String?) {
+        DispatchQueue.main.async { if self.autoWarning != w { self.autoWarning = w } }
+    }
+
+    /// Video output is gamma-encoded; exposure arithmetic is done on linear light.
+    private static func linear(_ v: Float) -> Float { powf(max(v, 0.5) / 255, 2.2) }
+
+    ///  too dark  : shortened shutter back to its home value → torch ↑ (up to the limit) → ISO ↑ (up to the limit)
+    ///  too bright: ISO ↓ (to the minimum) → torch ↓ (to off) → shutter ↓ (flicker-free steps first)
+    private func runAutoStep(p98: Float, saturated: Float, now: Double) {
+        guard let dev = device, now >= autoState.settleUntil else { return }
         let s = desired
         guard s.exposureAuto || s.torchAuto else { return }
-        let target = Self.autoTarget * powf(2, s.bias)
-        let lv = max(level, 1)
-        var ratio = target / lv
-        if abs(logf(ratio)) < logf(1.08) { return }                 // close enough
-        ratio = min(max(powf(ratio, 0.7), 0.5), 2.0)              // damped, at most one stop per step
-        if level >= 250 { ratio = min(ratio, 0.6) }
-
         let fmt = dev.activeFormat
-        let minISO = fmt.minISO, maxISO = fmt.maxISO
+        let minISO = fmt.minISO
+        let isoCap = min(fmt.maxISO, max(minISO, isoCapQ))
         let minDur = fmt.minExposureDuration.seconds
-        let maxDur = min(fmt.maxExposureDuration.seconds, 1 / max(s.fps, 1))
-        let torchOK = s.torchAuto && dev.hasTorch
+        let home = homeShutter(fmt)
+        let period = 1 / (2 * mainsQ)
+        let torchOK = s.torchAuto && dev.hasTorch && dev.isTorchAvailable
+        let torchCap: Float = torchOK ? min(1, max(0.05, torchCapQ)) : 0
+        let target = min(245, max(40, Self.autoTarget * powf(2, s.bias)))
+        let clipped = saturated >= 0.005 || p98 >= 252
         var iso = s.iso, dur = s.shutter, torch = s.torch
-        var expoChanged = false, torchChanged = false
+        let gain = max(iso * Float(dur), 1e-9)
 
-        if ratio > 1 {
-            if torchOK && torch < Self.autoTorchCap - 0.005 {
-                torch = min(Self.autoTorchCap, max(0.05, torch * ratio))
-                torchChanged = true
-            } else if s.exposureAuto {
-                var r = Double(ratio)
-                if s.shutterAuto && dur < maxDur * 0.999 {
-                    let nd = min(maxDur, dur * r)
-                    r *= dur / nd
+        // brightness per unit exposure at this torch level (for the torch model)
+        if !clipped && p98 > 4 {
+            let e = Self.linear(p98) / gain
+            if let i = autoState.points.firstIndex(where: { abs($0.t - torch) < 0.05 }) {
+                autoState.points[i] = (torch, e)
+            } else {
+                autoState.points.append((torch, e))
+                if autoState.points.count > 2 { autoState.points.removeFirst() }
+            }
+        }
+        var r: Float                                   // wanted change of (linear) brightness
+        if clipped {
+            r = 0.35
+        } else {
+            if abs(p98 - target) / target < 0.05 {
+                if autoState.warning != nil { autoState.warning = nil; publishWarning(nil) }
+                return
+            }
+            r = min(8, max(0.125, Self.linear(target) / Self.linear(p98)))
+        }
+        // torch model: light(t) = a + k·t (k = what full torch adds)
+        var model: (a: Float, k: Float)?
+        if autoState.points.count == 2 {
+            let p0 = autoState.points[0], p1 = autoState.points[1]
+            let k = (p1.e - p0.e) / (p1.t - p0.t)
+            if k.isFinite && k > 0 { model = (max(0, p0.e - k * p0.t), k) }
+        }
+        let torchUseless = model.map { $0.k * max(torchCap, 0.05) < 0.1 * $0.a } ?? false
+        func light(_ t: Float) -> Float { model.map { $0.a + $0.k * t } ?? 1 }
+
+        var warn: String?
+        var torchChanged = false
+        if r > 1 {
+            // 1. a shortened shutter goes back towards its home value (more light, no extra noise)
+            if s.exposureAuto && s.shutterAuto && dur < home * 0.999 {
+                var nd = dur < period * 0.999 ? min(period, dur * Double(r))
+                                               : ((dur / period).rounded() + 1) * period
+                nd = min(nd, home)
+                if nd > dur && Double(r) >= nd / dur * 0.95 {
+                    r *= Float(dur / nd)
                     dur = nd
-                    expoChanged = true
-                }
-                if r > 1.01 && iso < maxISO {
-                    iso = min(maxISO, iso * Float(r))
-                    expoChanged = true
                 }
             }
+            // 2. torch
+            if r > 1.02 && torchCap > 0 && !torchUseless && torch < torchCap - 0.005 {
+                if let m = model {
+                    let need = light(torch) * r
+                    let nt = min(torchCap, max(0, (need - m.a) / m.k))
+                    r = need / max(light(nt), 1e-12)
+                    torch = nt
+                } else {
+                    // not known yet how much the torch adds: switch it on and measure
+                    torch = torch < 0.02 ? min(torchCap, p98 < 30 ? 0.5 : 0.25) : min(torchCap, torch + 0.25)
+                    r = 1
+                }
+                torchChanged = true
+            }
+            // 3. ISO, up to the AUTO limit
+            if r > 1.02 && s.exposureAuto && iso < isoCap {
+                let ni = min(isoCap, iso * r)
+                r *= iso / ni
+                iso = ni
+            }
+            if r > 1.15 { warn = L("光线不足：闪光灯和 ISO 已到上限") }
         } else {
-            var r = ratio
+            // 1. ISO down to its minimum
             if s.exposureAuto && iso > minISO * 1.001 {
                 let ni = max(minISO, iso * r)
                 r *= iso / ni
                 iso = ni
-                expoChanged = true
             }
-            if r < 0.99 && torchOK && torch > 0 {
-                torch *= r
-                if torch < 0.03 { torch = 0 }
+            // 2. torch down, to off
+            if r < 0.98 && s.torchAuto && torch > 0 {
+                if let m = model, !clipped {
+                    let need = light(torch) * r
+                    var nt = (need - m.a) / m.k
+                    if nt < 0.03 { nt = need <= m.a ? 0 : 0.03 }
+                    nt = min(max(nt, 0), max(torchCap, 0.03))
+                    r = need / max(light(nt), 1e-12)
+                    torch = nt
+                } else {
+                    torch = torch * r < 0.03 ? 0 : torch * r
+                    r = 1
+                }
                 torchChanged = true
-            } else if r < 0.99 && s.exposureAuto && s.shutterAuto && dur > minDur * 1.001 {
-                dur = max(minDur, dur * Double(r))
-                expoChanged = true
+            }
+            // 3. shutter shorter (only when AUTO owns it): whole flicker periods first
+            if r < 0.98 && s.exposureAuto && s.shutterAuto && dur > minDur * 1.001 {
+                let want = dur * Double(r)
+                var nd = want >= period * 0.999 ? max(1, (want / period + 1e-6).rounded(.down)) * period
+                                                : max(minDur, want)
+                nd = min(nd, dur)
+                r *= Float(dur / nd)              // > 1 if the flicker-free step went further than needed
+                dur = nd
+                if r > 1.02 { iso = min(isoCap, iso * r); r = 1 }
+            }
+            if s.exposureAuto && s.shutterAuto && dur < period * 0.999 {
+                warn = L("光线太强：快门已短于防频闪值，画面可能闪烁")
+            } else if r < 0.85 {
+                warn = L("光线太强：已无法再降低亮度")
             }
         }
+
+        let expoChanged = iso != s.iso || dur != s.shutter
         if expoChanged {
             desired.iso = iso
             desired.shutter = dur
             applyExposure()
         }
-        if torchChanged {
+        if torchChanged && torch != s.torch {
             desired.torch = torch
             applyTorch()
         }
-        if expoChanged || torchChanged { publishDesired() }
+        if expoChanged || torchChanged {
+            autoState.settleUntil = ProcessInfo.processInfo.systemUptime + (torchChanged ? 0.5 : 0.35)
+            publishDesired()
+        }
+        if warn != autoState.warning {
+            autoState.warning = warn
+            publishWarning(warn)
+        }
     }
 
     /// Add or remove the microphone (level meter + audio track). Asks for permission when needed.
@@ -901,46 +1043,32 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     /// Freeze exposure, white balance, focus and torch at their current values (measurement mode).
-    /// An automatic shutter is first moved to the nearest flicker-free value (if enabled) and the ISO
-    /// is scaled so the brightness stays the same. `completion` gets a summary of the locked values.
+    /// `completion` (main thread) gets a summary of the locked values.
     func lockAll(completion: ((String) -> Void)? = nil) {
-        let mains = mainsHz
-        let fixShutter = fixShutterOnLock
         sessionQueue.async {
             guard let dev = self.device else {
                 DispatchQueue.main.async { completion?("") }
                 return
             }
             let fmt = dev.activeFormat
-            var iso = dev.iso
             var dur = dev.exposureDuration.seconds
-            if dur <= 0 { dur = self.desired.shutter }
-            var flickerNote = ""
-            if fixShutter && self.desired.exposureAuto && self.desired.shutterAuto {
-                let period = 1 / (2 * mains)
-                let maxDur = min(fmt.maxExposureDuration.seconds, 1 / max(self.desired.fps, 1))
-                let kMax = Int((maxDur / period + 1e-6).rounded(.down))
-                if kMax >= 1 {
-                    let best = (1...kMax).map { Double($0) * period }
-                        .min { abs(log($0 / dur)) < abs(log($1 / dur)) } ?? dur
-                    iso = min(max(iso * Float(dur / best), fmt.minISO), fmt.maxISO)
-                    dur = best
-                } else {
-                    flickerNote = " · " + String(format: L("%d fps 无法防频闪"), Int(self.desired.fps))
-                }
-            }
+            if !(dur > 0) { dur = self.desired.shutter }
+            dur = min(max(dur, fmt.minExposureDuration.seconds), fmt.maxExposureDuration.seconds)
+            let iso = min(max(dev.iso, fmt.minISO), fmt.maxISO)
             self.desired.iso = iso
             self.desired.shutter = dur
             self.desired.exposureAuto = false
             self.desired.shutterAuto = false
             let tt = dev.temperatureAndTintValues(for: dev.deviceWhiteBalanceGains)
-            self.desired.temperature = tt.temperature
-            self.desired.tint = tt.tint
+            if tt.temperature.isFinite { self.desired.temperature = tt.temperature }
+            if tt.tint.isFinite { self.desired.tint = tt.tint }
             self.desired.wbAuto = false
-            self.desired.lensPosition = dev.lensPosition
+            self.desired.lensPosition = min(max(dev.lensPosition, 0), 1)
             self.desired.focusAuto = false
             self.desired.torchAuto = false
             self.autoLoopActive = false
+            self.autoState = AutoState()
+            self.publishWarning(nil)
             do {
                 try dev.lockForConfiguration()
                 if dev.isExposureModeSupported(.custom) {
@@ -958,8 +1086,12 @@ final class CameraController: NSObject, ObservableObject {
                 self.report(L("锁定失败") + ": \(error.localizedDescription)")
             }
             self.publishDesired()
+            let k = dur * 2 * self.mainsQ
+            let flickerFree = k >= 0.98 && abs(k - k.rounded()) < 0.02
             let torchText = dev.hasTorch ? " · " + L("闪光") + " \(Int((self.desired.torch * 100).rounded()))%" : ""
-            let summary = "ISO \(Int(iso.rounded())) · \(dur.shutterLabel)\(torchText) · \(Int(tt.temperature.rounded()))K" + flickerNote
+            let tempText = tt.temperature.isFinite ? " · \(Int(tt.temperature.rounded()))K" : ""
+            let summary = "ISO \(Int(iso.rounded())) · \(dur.shutterLabel)\(torchText)\(tempText)"
+                + (flickerFree ? "" : " · " + L("快门非防频闪"))
             DispatchQueue.main.async { self.lockSummary = summary }
             // give the ISP a moment to settle before the baseline is taken
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { completion?(summary) }
@@ -985,11 +1117,11 @@ final class CameraController: NSObject, ObservableObject {
             let tt = dev.temperatureAndTintValues(for: dev.deviceWhiteBalanceGains)
             DispatchQueue.main.async {
                 if s.exposureAuto {
-                    self.iso = iso
-                    if dur > 0 { self.shutter = dur }
+                    if iso.isFinite { self.iso = iso }
+                    if dur.isFinite && dur > 0 { self.shutter = dur }
                 }
-                if s.focusAuto { self.lensPosition = lens }
-                if s.wbAuto {
+                if s.focusAuto && lens.isFinite { self.lensPosition = lens }
+                if s.wbAuto && tt.temperature.isFinite && tt.tint.isFinite {
                     self.temperature = tt.temperature
                     self.tint = tt.tint
                 }

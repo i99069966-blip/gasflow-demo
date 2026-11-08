@@ -6,6 +6,8 @@ final class RegionEditState: ObservableObject {
     enum Selection: Equatable { case region(Int), reference, grid }
     /// What a drag on empty space draws.
     @Published var target: Target = .region
+    /// A finger is drawing / moving on the picture (the toolbar fades out).
+    @Published var dragging = false
     @Published var selection: Selection?
 }
 
@@ -209,6 +211,7 @@ struct RegionOverlay: View {
     }
 
     private func changed(_ v: DragGesture.Value) {
+        if !edit.dragging { edit.dragging = true }
         if action == nil {
             let a = decide(at: v.startLocation)
             action = a
@@ -243,7 +246,7 @@ struct RegionOverlay: View {
     }
 
     private func ended(_ v: DragGesture.Value) {
-        defer { action = nil; draft = nil }
+        defer { action = nil; draft = nil; edit.dragging = false }
         let tiny = hypot(v.translation.width, v.translation.height) < 6
         switch action {
         case .draw:
@@ -280,7 +283,8 @@ struct RegionOverlay: View {
     }
 }
 
-/// Bottom panel while the regions are being edited.
+/// Compact toolbar shown at the top of the screen while the regions are being edited.
+/// Fades out while a finger is drawing / moving on the picture.
 struct RegionPanel: View {
     @EnvironmentObject var pipeline: FramePipeline
     @EnvironmentObject var edit: RegionEditState
@@ -288,8 +292,8 @@ struct RegionPanel: View {
 
     var body: some View {
         let regs = pipeline.regions
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
                 Picker("", selection: Binding(get: { pipeline.regions.mode }, set: { m in
                     pipeline.regions.mode = m
                     edit.selection = nil
@@ -298,31 +302,18 @@ struct RegionPanel: View {
                     Text(L("网格")).tag(RegionMode.grid)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 150)
-                Spacer(minLength: 4)
-                Button(L("完成")) {
-                    edit.selection = nil
-                    edit.target = .region
-                    editing = false
-                }
-                .font(Theme.mono(13, .bold))
-                .foregroundStyle(Theme.accent)
-            }
-            if regs.mode == .free {
-                Text(String(format: L("在空白处拖动画新框（%d/6），拖框内移动，拖四角改大小"), regs.rects.count))
-                    .font(Theme.mono(10)).foregroundStyle(.gray)
-            } else {
-                gridControls(regs)
-            }
-            HStack(spacing: 6) {
-                PillButton(text: L("参考框"), selected: edit.target == .reference) {
+                .frame(width: 112)
+                PillButton(text: "REF", selected: edit.target == .reference) {
                     edit.target = edit.target == .reference ? .region : .reference
                 }
-                PillButton(text: L("删除选中"), disabled: edit.selection == nil) {
+                PillButton(text: L("校正"), selected: pipeline.params.useReference, disabled: regs.reference == nil) {
+                    pipeline.params.useReference.toggle()
+                }
+                iconButton("trash", disabled: edit.selection == nil) {
                     if let s = edit.selection { pipeline.regions.remove(s) }
                     edit.selection = nil
                 }
-                PillButton(text: L("清空")) {
+                iconButton("xmark.square") {
                     var r = pipeline.regions
                     r.rects = []
                     r.gridArea = nil
@@ -331,41 +322,62 @@ struct RegionPanel: View {
                     edit.selection = nil
                 }
                 Spacer(minLength: 0)
+                Button(L("完成")) {
+                    edit.selection = nil
+                    edit.target = .region
+                    editing = false
+                }
+                .font(Theme.mono(13, .bold))
+                .foregroundStyle(Theme.accent)
             }
-            if edit.target == .reference {
-                Text(L("在白纸或灰卡上拖动画参考框")).font(Theme.mono(10)).foregroundStyle(Theme.accent)
+            if regs.mode == .grid {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        preset("2×2", 2, 2); preset("3×3", 3, 3); preset("4×4", 4, 4)
+                        preset(L("横条"), 4, 1); preset(L("竖条"), 1, 4)
+                        counter(String(format: L("行 %d"), regs.rows),
+                                minus: { setGrid(rows: regs.rows - 1, cols: regs.cols) },
+                                plus: { setGrid(rows: regs.rows + 1, cols: regs.cols) })
+                        counter(String(format: L("列 %d"), regs.cols),
+                                minus: { setGrid(rows: regs.rows, cols: regs.cols - 1) },
+                                plus: { setGrid(rows: regs.rows, cols: regs.cols + 1) })
+                    }
+                }
             }
-            Toggle(isOn: $pipeline.params.useReference) {
-                Text(L("参考框校正（用参考框抵消灯光/曝光变化）")).font(Theme.mono(11))
-            }
-            .tint(Theme.accent)
-            .disabled(regs.reference == nil)
         }
-        .padding(10)
-        .background(Theme.panel)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Theme.bar)
+        .opacity(edit.dragging ? 0.08 : 1)
+        .allowsHitTesting(!edit.dragging)
+        .animation(.easeOut(duration: 0.15), value: edit.dragging)
     }
 
-    @ViewBuilder
-    private func gridControls(_ regs: AnalysisRegions) -> some View {
-        Text(regs.gridArea == nil ? L("先在画面上拖出总区域，再选择划分方式")
-                                  : L("拖总区域移动，拖四角改大小；空白处拖动重新画"))
-            .font(Theme.mono(10)).foregroundStyle(.gray)
-        HStack(spacing: 6) {
-            preset("2×2", 2, 2); preset("3×3", 3, 3); preset("4×4", 4, 4)
-            preset(L("横条"), 4, 1); preset(L("竖条"), 1, 4)
+    private func iconButton(_ name: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: name)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 30, height: 28)
+                .background(Color.white.opacity(0.12))
+                .foregroundStyle(disabled ? Color.gray : Color.white)
+                .clipShape(Capsule())
         }
-        HStack(spacing: 14) {
-            Stepper(value: Binding(get: { pipeline.regions.rows }, set: { setGrid(rows: $0, cols: pipeline.regions.cols) }),
-                    in: 1...AnalysisRegions.maxGridLines) {
-                Text(String(format: L("行 %d"), regs.rows)).font(Theme.mono(12))
-            }
-            Stepper(value: Binding(get: { pipeline.regions.cols }, set: { setGrid(rows: pipeline.regions.rows, cols: $0) }),
-                    in: 1...AnalysisRegions.maxGridLines) {
-                Text(String(format: L("列 %d"), regs.cols)).font(Theme.mono(12))
-            }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+    }
+
+    private func counter(_ title: String, minus: @escaping () -> Void, plus: @escaping () -> Void) -> some View {
+        HStack(spacing: 2) {
+            Button(action: minus) { Image(systemName: "minus").frame(width: 24, height: 26) }
+            Text(title).font(Theme.mono(12, .semibold))
+            Button(action: plus) { Image(systemName: "plus").frame(width: 24, height: 26) }
         }
+        .buttonStyle(.plain)
+        .font(.system(size: 12, weight: .bold))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 4)
+        .background(Color.white.opacity(0.12))
+        .clipShape(Capsule())
     }
 
     private func preset(_ title: String, _ rows: Int, _ cols: Int) -> some View {
@@ -375,14 +387,43 @@ struct RegionPanel: View {
     }
 
     private func setGrid(rows: Int, cols: Int) {
-        guard rows * cols <= AnalysisRegions.maxGridCells else {
+        let r0 = min(max(rows, 1), AnalysisRegions.maxGridLines)
+        let c0 = min(max(cols, 1), AnalysisRegions.maxGridLines)
+        guard r0 * c0 <= AnalysisRegions.maxGridCells else {
             pipeline.toast = L("网格最多 16 格")
             return
         }
         var r = pipeline.regions
-        r.rows = rows
-        r.cols = cols
+        r.rows = r0
+        r.cols = c0
         pipeline.regions = r
+    }
+}
+
+/// Short instructions at the bottom of the picture while editing.
+struct RegionHint: View {
+    @EnvironmentObject var pipeline: FramePipeline
+    @EnvironmentObject var edit: RegionEditState
+
+    var body: some View {
+        let regs = pipeline.regions
+        let text: String = {
+            if edit.target == .reference { return L("在白纸或灰卡上拖动画参考框") }
+            if regs.mode == .grid {
+                return regs.gridArea == nil ? L("先在画面上拖出总区域，再选择划分方式")
+                                            : L("拖总区域移动，拖四角改大小；空白处拖动重新画")
+            }
+            return String(format: L("在空白处拖动画新框（%d/6），拖框内移动，拖四角改大小"), regs.rects.count)
+        }()
+        Text(text)
+            .font(Theme.mono(11, .semibold))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(Color.black.opacity(0.65))
+            .foregroundStyle(edit.target == .reference ? Theme.accent : .white)
+            .clipShape(Capsule())
+            .opacity(edit.dragging ? 0 : 1)
+            .allowsHitTesting(false)
     }
 }
 

@@ -72,8 +72,20 @@ enum CameraPresets {
 extension Double {
     /// "1/60" style label for a shutter time in seconds.
     var shutterLabel: String {
+        guard isFinite else { return "--" }
         guard self > 0 else { return "--" }
         if self >= 0.5 { return String(format: "%.1fs", self) }
         return "1/\(Int((1 / self).rounded()))"
+    }
+}
+
+extension BinaryFloatingPoint {
+    /// Rounded Int that never traps on NaN / ±inf / huge values (0 for NaN).
+    var safeInt: Int {
+        guard isFinite else { return 0 }
+        let r = rounded()
+        if r >= Self(Int.max / 2) { return Int.max / 2 }
+        if r <= Self(Int.min / 2) { return Int.min / 2 }
+        return Int(r)
     }
 }

@@ -39,6 +39,14 @@ enum ResponsePolarity: String, CaseIterable, Identifiable, Codable {
         case .both: return "双向 |ΔS|"
         }
     }
+    /// Change in % with the sign convention of the detector (gas = positive).
+    func apply(_ v: Float) -> Float {
+        switch self {
+        case .decrease: return -v
+        case .increase: return v
+        case .both: return abs(v)
+        }
+    }
 }
 
 /// All tunables of the detector. Defaults were validated on A001_10312104_C067.mov
@@ -236,6 +244,31 @@ struct RegionMasks {
     let regionIndices: [[Int32]]
     /// Pixel indices of the reference box (empty if none).
     let refIndices: [Int32]
+
+    /// AUTO metering over the analysed pixels and the reference box: 98th percentile of the
+    /// brightest channel (0–255) and the fraction of pixels at ≥ 250.
+    func brightness(bgra: UnsafePointer<UInt8>, bytesPerRow: Int) -> (p98: Float, saturated: Float) {
+        var hist = [Int](repeating: 0, count: 256)
+        var n = 0
+        func add(_ i: Int) {
+            let p = bgra + (i / width) * bytesPerRow + (i % width) * 4
+            hist[Int(max(p[0], p[1], p[2]))] += 1
+            n += 1
+        }
+        for i in 0..<(width * height) where bits[i] != 0 { add(i) }
+        for i in refIndices { add(Int(i)) }
+        guard n > 0 else { return (0, 0) }
+        var sat = 0
+        for v in 250...255 { sat += hist[v] }
+        let need = Int(Double(n) * 0.98)
+        var acc = 0
+        var p98 = 255
+        for v in 0...255 {
+            acc += hist[v]
+            if acc >= need { p98 = v; break }
+        }
+        return (Float(p98), Float(sat) / Float(n))
+    }
     let bounds: NormRect
 
     init(regions: AnalysisRegions, width: Int, height: Int) {
@@ -378,6 +411,10 @@ struct GasFrameResult: Equatable {
     var refFactor: Float = 1
     /// Raw mean colour of the reference box.
     var refMean: RGBMean? = nil
+    /// Change (%) of the reference box since the baseline (same sign convention as the response).
+    var refResponse: Float? = nil
+    /// Gas is on the plate right now (arrivals recorded and pixels still above threshold).
+    var gasPresent = false
 }
 
 /// Video analysis: where (in video seconds) the baseline was taken and the gas first arrived.
@@ -402,6 +439,8 @@ struct ChartSample: Equatable {
     var regionResponse: [Float] = []
     /// Raw mean colour of the reference box.
     var ref: RGBMean? = nil
+    /// Change (%) of the reference box since the baseline.
+    var refResponse: Float? = nil
 }
 
 enum ChartMode: String, CaseIterable, Identifiable, Codable {

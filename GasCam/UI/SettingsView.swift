@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var showImporter = false
     @State private var loadingVideo = false
     @State private var recordingCount = 0
+    @State private var crashLogs: [URL] = []
 
     var body: some View {
         NavigationStack {
@@ -40,6 +41,7 @@ struct SettingsView: View {
                 assistSection
                 detectionSection
                 advancedSection
+                crashSection
                 aboutSection
             }
             .navigationTitle(L("GasCam 设置"))
@@ -73,7 +75,10 @@ struct SettingsView: View {
                     }
                 }
             }
-            .onAppear { recordingCount = RecordingStore.list().count }
+            .onAppear {
+                recordingCount = RecordingStore.list().count
+                crashLogs = CrashReporter.list()
+            }
         }
         .preferredColorScheme(.dark)
     }
@@ -157,11 +162,16 @@ struct SettingsView: View {
                 Text(L("60 Hz（九州・关西）")).tag(60.0)
                 Text(L("50 Hz（关东・东北）")).tag(50.0)
             }
-            Toggle(L("LOCK 时把快门改到防频闪值"), isOn: $camera.fixShutterOnLock)
+            Picker(L("AUTO 最高 ISO"), selection: $camera.autoISOCap) {
+                ForEach([Float(200), 400, 800, 1600, 3200], id: \.self) { v in Text("\(Int(v))").tag(v) }
+            }
+            ValueSlider(label: L("AUTO 闪光灯上限"), value: $camera.autoTorchLimit, range: 0.1...1) {
+                "\(Int(($0 * 100).rounded()))%"
+            }
         } header: {
             Text(L("相机 AUTO / LOCK"))
         } footer: {
-            Text(L("AUTO：对焦、快门、ISO、白平衡自动，闪光灯按分析框亮度自动调节（暗了先加闪光灯，最高 70%，再加快门和 ISO；亮了先降 ISO，再降闪光灯）。点画面只用于对焦。LOCK：全部固定并显示最终参数。只用闪光灯照明时可以关掉快门修正。"))
+            Text(L("AUTO：快门固定为不超过 1/帧率的最长防频闪值；框内最亮的 2% 像素调到约 85%（不过曝）。暗了先加闪光灯，开满还不够再升 ISO（不超过上面的上限）；亮了先降 ISO，再降闪光灯，最后才缩短快门。点画面只用于对焦。按 LOCK 全部固定并显示最终参数。最高 ISO 只限制 AUTO，手动仍可设到手机的最高值。"))
         }
     }
 
@@ -177,6 +187,7 @@ struct SettingsView: View {
             Toggle(L("中心十字"), isOn: $pipeline.display.crosshair)
             Toggle(L("水平仪（镜头朝下）"), isOn: $pipeline.display.level)
             Toggle(L("显示气源箭头"), isOn: $pipeline.display.showArrow)
+            Toggle(L("气体消失后保留上一次的箭头（虚线）"), isOn: $pipeline.display.keepLastResult)
             Toggle(L("显示最大响应点（十字）"), isOn: $pipeline.display.showHotspot)
             Toggle(L("显示变化曲线"), isOn: $pipeline.display.showChart)
             Toggle(L("显示色标条"), isOn: $pipeline.display.showColorBar)
@@ -243,6 +254,30 @@ struct SettingsView: View {
         }
     }
 
+    private var crashSection: some View {
+        Section {
+            if crashLogs.isEmpty {
+                Text(L("没有崩溃记录")).foregroundStyle(.gray)
+            }
+            ForEach(crashLogs, id: \.self) { url in
+                ShareLink(item: url) {
+                    Label(url.lastPathComponent, systemImage: "square.and.arrow.up")
+                        .font(Theme.mono(12))
+                }
+            }
+            if !crashLogs.isEmpty {
+                Button(L("清除崩溃记录"), role: .destructive) {
+                    CrashReporter.clear()
+                    crashLogs = CrashReporter.list()
+                }
+            }
+        } header: {
+            Text(String(format: L("崩溃记录（%d）"), crashLogs.count))
+        } footer: {
+            Text(L("闪退后再次打开 App，这里会出现记录（iOS 的崩溃报告有时要晚一些才送来）。点一下即可分享（AirDrop / 存到“文件”），发给开发者定位问题。"))
+        }
+    }
+
     @ViewBuilder
     private var aboutSection: some View {
         Section(L("本机能力（当前镜头）")) {
@@ -254,7 +289,7 @@ struct SettingsView: View {
                 .font(.footnote).foregroundStyle(.gray)
         }
         Section(L("关于")) {
-            LabeledContent(L("版本"), value: "1.4")
+            LabeledContent(L("版本"), value: CrashReporter.appVersion)
             LabeledContent(L("分析网格"), value: L("长边 256 px"))
             Text(L("参考实现：tools/gas_reference.py（与 App 算法逐步一致，可在电脑上复现 App 的结果）。"))
                 .font(.footnote).foregroundStyle(.gray)
@@ -279,7 +314,7 @@ struct SettingsView: View {
     }
 }
 
-/// Recordings made by the app: first-frame thumbnail + name; tap to analyse, rename.
+/// Recordings made by the app: first-frame thumbnail + name; tap to analyse, rename, delete.
 struct RecordingsView: View {
     @EnvironmentObject var pipeline: FramePipeline
     let onOpen: (URL) -> Void
@@ -288,6 +323,10 @@ struct RecordingsView: View {
     @State private var newName = ""
     @State private var busy = false
     @State private var message: String?
+    @State private var selecting = false
+    @State private var selection = Set<URL>()
+    @State private var pendingDelete: [RecordingStore.Item] = []
+    @State private var showDeleteDialog = false
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -302,29 +341,38 @@ struct RecordingsView: View {
                 Text(L("还没有录像")).foregroundStyle(.gray)
             }
             ForEach(items) { item in
-                HStack(spacing: 12) {
-                    RecordingThumb(url: item.url)
-                        .frame(width: 54, height: 96)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.name).font(Theme.mono(13, .semibold)).lineLimit(2)
-                        Text(Self.dateFormatter.string(from: item.date)).font(Theme.mono(11)).foregroundStyle(.gray)
+                row(item)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            askDelete([item])
+                        } label: {
+                            Label(L("删除"), systemImage: "trash")
+                        }
                     }
-                    Spacer(minLength: 4)
-                    Button {
-                        newName = item.name
-                        renaming = item
-                    } label: {
-                        Image(systemName: "pencil").font(.system(size: 16, weight: .semibold))
-                            .frame(width: 36, height: 36)
-                    }
-                    .buttonStyle(.borderless)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture { onOpen(item.url) }
             }
         }
         .navigationTitle(L("本 App 的录像"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if !items.isEmpty {
+                    Button(selecting ? L("取消") : L("选择")) {
+                        selecting.toggle()
+                        selection = []
+                    }
+                }
+            }
+            ToolbarItem(placement: .bottomBar) {
+                if selecting {
+                    Button(role: .destructive) {
+                        askDelete(items.filter { selection.contains($0.url) })
+                    } label: {
+                        Text(String(format: L("删除（%d）"), selection.count)).foregroundStyle(selection.isEmpty ? Color.gray : Color.red)
+                    }
+                    .disabled(selection.isEmpty)
+                }
+            }
+        }
         .overlay {
             if busy { ProgressView().padding(20).background(Color.black.opacity(0.7)).clipShape(RoundedRectangle(cornerRadius: 10)) }
         }
@@ -338,8 +386,74 @@ struct RecordingsView: View {
         } message: {
             Text(L(".mov / .json / .csv 一起改名；相册里的副本会另存新名字，再删除旧的（iOS 会请你确认）。"))
         }
+        .confirmationDialog(String(format: L("删除 %d 段录像？"), pendingDelete.count),
+                            isPresented: $showDeleteDialog, titleVisibility: .visible) {
+            Button(L("只删 App 里的"), role: .destructive) { delete(includePhotos: false) }
+            Button(L("同时删相册里的那份"), role: .destructive) { delete(includePhotos: true) }
+            Button(L("取消"), role: .cancel) { pendingDelete = [] }
+        } message: {
+            Text(L(".mov / .json / .csv 会一起删除，无法恢复。删除相册里的那份时 iOS 会再确认一次。"))
+        }
         .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) { message = nil }
+        }
+    }
+
+    private func row(_ item: RecordingStore.Item) -> some View {
+        HStack(spacing: 12) {
+            if selecting {
+                Image(systemName: selection.contains(item.url) ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundStyle(selection.contains(item.url) ? Theme.accent : Color.gray)
+            }
+            RecordingThumb(url: item.url)
+                .frame(width: 54, height: 96)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.name).font(Theme.mono(13, .semibold)).lineLimit(2)
+                Text(Self.dateFormatter.string(from: item.date)).font(Theme.mono(11)).foregroundStyle(.gray)
+            }
+            Spacer(minLength: 4)
+            if !selecting {
+                Button {
+                    newName = item.name
+                    renaming = item
+                } label: {
+                    Image(systemName: "pencil").font(.system(size: 16, weight: .semibold))
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if selecting {
+                if selection.contains(item.url) { selection.remove(item.url) } else { selection.insert(item.url) }
+            } else {
+                onOpen(item.url)
+            }
+        }
+    }
+
+    private func askDelete(_ list: [RecordingStore.Item]) {
+        guard !list.isEmpty else { return }
+        pendingDelete = list
+        showDeleteDialog = true
+    }
+
+    private func delete(includePhotos: Bool) {
+        let list = pendingDelete
+        pendingDelete = []
+        // a video that is being analysed is closed first
+        if case .file(let name) = pipeline.source, list.contains(where: { $0.url.lastPathComponent == name }) {
+            pipeline.closeVideo()
+        }
+        busy = includePhotos
+        RecordingStore.delete(list, includePhotos: includePhotos) { msg in
+            busy = false
+            items = RecordingStore.list()
+            selection = []
+            selecting = false
+            message = msg
         }
     }
 

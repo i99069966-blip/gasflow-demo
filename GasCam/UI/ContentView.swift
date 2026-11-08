@@ -16,14 +16,26 @@ struct ContentView: View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             VStack(spacing: 0) {
+                // while editing regions the toolbar covers the top bar (same place, no layout change)
                 TopBar(active: $activeControl)
-                ZStack(alignment: .bottom) {
-                    PreviewArea(editROI: $editROI)
-                    VStack(spacing: 6) {
+                    .opacity(editROI ? 0 : 1)
+                    .allowsHitTesting(!editROI)
+                    .overlay(alignment: .top) {
                         if editROI {
                             RegionPanel(editing: $editROI)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                        } else if pipeline.source == .camera, let c = activeControl {
+                                .transition(.opacity)
+                        }
+                    }
+                    .zIndex(1)
+                ZStack(alignment: .bottom) {
+                    PreviewArea(editROI: $editROI)
+                    if editROI {
+                        RegionHint()
+                            .padding(.bottom, 14)
+                            .padding(.horizontal, 12)
+                    }
+                    VStack(spacing: 6) {
+                        if pipeline.source == .camera, let c = activeControl {
                             ControlPanel(kind: c)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
@@ -42,12 +54,16 @@ struct ContentView: View {
                         }
                     }
                     .padding(.bottom, 4)
+                    .opacity(editROI ? 0 : 1)
+                    .allowsHitTesting(!editROI)
                 }
                 .overlay(alignment: .topTrailing) {
-                    AssistColumn(editROI: $editROI,
-                                 forceCollapsed: showGasPanel || editROI || (pipeline.source == .camera && activeControl != nil))
-                        .padding(.top, 8)
-                        .padding(.trailing, 6)
+                    if !editROI {
+                        AssistColumn(editROI: $editROI,
+                                     forceCollapsed: showGasPanel || (pipeline.source == .camera && activeControl != nil))
+                            .padding(.top, 8)
+                            .padding(.trailing, 6)
+                    }
                 }
             }
             if let msg = pipeline.toast ?? camera.statusMessage {
