@@ -669,13 +669,13 @@ final class FramePipeline: ObservableObject {
         let p = params
         let coarse = scanCoarse
         let raw = scanRaw
-        guard p.autoScale, let b0 = m.baselineStart, let b1 = m.baselineEnd, coarse.frames > 0,
+        guard p.autoScale, let b0 = m.baselineStart, let b1 = m.baselineEnd, b0.isFinite, b1.isFinite, coarse.frames > 0,
               coarse.channel == p.channel else {
             setVideoScale(nil)
             return
         }
         let work = DispatchWorkItem { [weak self] in
-            let v = coarse.scale(baseline: b0...b1, params: p, samples: raw)
+            let v = coarse.scale(baseline: min(b0, b1)...max(b0, b1), params: p, samples: raw)
             DispatchQueue.main.async { self?.setVideoScale(v) }
         }
         scaleWork = work
@@ -880,8 +880,8 @@ final class FramePipeline: ObservableObject {
             if case .baseline = r.phase, r.baselineFrames <= 1 {
                 procMarks = VideoMarks(baselineStart: t, baselineEnd: nil, firstArrival: nil); changed = true
             }
-            if case .monitoring = r.phase, procMarks.baselineStart != nil, procMarks.baselineEnd == nil {
-                procMarks.baselineEnd = t; changed = true
+            if case .monitoring = r.phase, let b0 = procMarks.baselineStart, procMarks.baselineEnd == nil {
+                procMarks.baselineEnd = max(t, b0); changed = true
             }
             if case .detected = r.phase, register, procMarks.firstArrival == nil, procMarks.baselineEnd != nil {
                 procMarks.firstArrival = t; changed = true

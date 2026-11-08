@@ -27,7 +27,7 @@ struct ChartPanel: View {
             : nil
         let m = pipeline.marks
         let preview: ClosedRange<Double>? = {
-            guard file, let ph = playhead,
+            guard file, let ph = playhead, ph.isFinite,
                   m.baselineEnd == nil || pipeline.scrubTime != nil || pipeline.playbackPaused else { return nil }
             return ph...(ph + pipeline.params.baselineSeconds)
         }()
@@ -119,9 +119,10 @@ struct ChartPanel: View {
     /// Visible time range for a video: the whole file if it fits (or window = all), otherwise a
     /// window around the playhead.
     static func span(duration: Double, window: Double, playhead: Double) -> ClosedRange<Double> {
-        let d = max(duration, 0.01)
+        let d = duration.isFinite ? max(duration, 0.01) : 0.01
         if window <= 0 || d <= window { return 0...d }
-        let start = min(max(0, playhead - window / 2), d - window)
+        let ph = playhead.isFinite ? playhead : 0
+        let start = min(max(0, ph - window / 2), d - window)
         return start...(start + window)
     }
 

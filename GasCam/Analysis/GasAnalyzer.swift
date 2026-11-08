@@ -206,6 +206,12 @@ final class GasAnalyzer {
     /// Video scrubbing: restart the EMA / frame-difference history at the new position but
     /// keep the baseline, the arrival map and the source estimate.
     func seekReset() {
+        // a jump while the baseline is being collected would mix two different moments:
+        // start the baseline again from the new position
+        if !ready && nBaseline > 0 {
+            resetBaseline()
+            return
+        }
         resp.update(repeating: 0, count: count)
         run.update(repeating: 0, count: count)
         clearHistory()
