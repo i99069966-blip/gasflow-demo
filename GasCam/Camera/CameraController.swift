@@ -871,7 +871,9 @@ final class CameraController: NSObject, ObservableObject {
             r = 0.35
         } else {
             if abs(p98 - target) / target < 0.05 {
-                if autoState.warning != nil { autoState.warning = nil; publishWarning(nil) }
+                // keep the flicker warning while the shutter stays shorter than flicker-free
+                let shortShutter = s.exposureAuto && s.shutterAuto && dur < period * 0.999
+                if autoState.warning != nil && !shortShutter { autoState.warning = nil; publishWarning(nil) }
                 return
             }
             r = min(8, max(0.125, Self.linear(target) / Self.linear(p98)))
