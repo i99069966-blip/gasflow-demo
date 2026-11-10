@@ -13,6 +13,9 @@ import CoreGraphics
 ///   5. arrival   time of the first confirmed activation of each pixel (arrival-time map)
 ///   6. source    E = centroid of the earliest 5 % arrivals, C = centroid of all arrivals,
 ///                direction = (E − C)/|E − C|, ray from E to the ROI edge = upstream source point.
+///   5b. adaptive arrival (optional): every pixel also records when it first crossed each of 8 levels
+///                (1/8 … 8/8 of its threshold) and its peak response; its arrival is then the crossing
+///                of min(50 % of its own peak, threshold). Weakly responding pixels no longer look late.
 ///
 /// Not thread-safe: call from a single queue.
 final class GasAnalyzer {
@@ -34,6 +37,27 @@ final class GasAnalyzer {
     private let arrival: UnsafeMutablePointer<Float>      // seconds since origin, −1 = not reached
     private let lastArrival: UnsafeMutablePointer<Float>  // snapshot of the previous event
     private let run: UnsafeMutablePointer<Int32>
+
+    // Adaptive arrival: a ladder of levels per pixel (level j = (j+1)/K of the pixel's threshold) with
+    // the first confirmed crossing time of each, the running peak, and the resulting arrival map.
+    static let ladderLevels = 8
+    /// Crossings older than this before the first threshold arrival are drift, not gas (s).
+    static let adaptiveWindow: Float = 3
+    /// A pixel must reach this fraction of the plate's strong response (90th percentile of the peaks).
+    static let adaptiveRelGate: Float = 0.25
+    private let ladderT: UnsafeMutablePointer<Float>      // count × K, seconds since origin, −1 = not crossed
+    private let ladderRun: UnsafeMutablePointer<UInt8>    // count × K, consecutive frames above the level
+    private let ladderMin: UnsafeMutablePointer<UInt8>    // lowest level above the pixel's noise
+    private let peak: UnsafeMutablePointer<Float>
+    private let arrivalA: UnsafeMutablePointer<Float>     // adaptive arrival, −1 = not reached
+    private var adaptiveCount = 0
+    private var adaptiveSource: GasSource?
+    private var adaptiveRegionArrived: [Int] = []
+    private var adaptiveRegionT: [Float?] = []
+    private var binN = [Int32](repeating: 0, count: 256)
+    private var binX = [Double](repeating: 0, count: 256)
+    private var binY = [Double](repeating: 0, count: 256)
+    private var regionBins: [Int32] = []
 
     // Frame-difference (FLOW) history: ring of past response maps.
     private static let historySlots = 64
@@ -106,14 +130,22 @@ final class GasAnalyzer {
         run = UnsafeMutablePointer<Int32>.allocate(capacity: width * height)
         run.initialize(repeating: 0, count: width * height)
         maxRGB = u(); minRGB = u(); saturationOK = u(); valid = u()
+        let K = GasAnalyzer.ladderLevels
+        ladderT = UnsafeMutablePointer<Float>.allocate(capacity: width * height * K)
+        ladderT.initialize(repeating: -1, count: width * height * K)
+        ladderRun = UnsafeMutablePointer<UInt8>.allocate(capacity: width * height * K)
+        ladderRun.initialize(repeating: 0, count: width * height * K)
+        ladderMin = u(); peak = f(); arrivalA = f()
         history = UnsafeMutablePointer<Float>.allocate(capacity: GasAnalyzer.historySlots * width * height)
         history.initialize(repeating: 0, count: GasAnalyzer.historySlots * width * height)
         resetBaseline()
     }
 
     deinit {
-        for p in [sig, tmp, mean, m2, thr, resp, arrival, lastArrival] { p.deallocate() }
+        for p in [sig, tmp, mean, m2, thr, resp, arrival, lastArrival, peak, arrivalA, ladderT] { p.deallocate() }
         run.deallocate()
+        ladderRun.deallocate()
+        ladderMin.deallocate()
         history.deallocate()
         for p in [maxRGB, minRGB, saturationOK, valid] { p.deallocate() }
     }
@@ -127,7 +159,21 @@ final class GasAnalyzer {
             resetBaseline()
         } else if ready && (newParams.kSigma != old.kSigma || newParams.minPercent != old.minPercent) {
             computeThresholds()
+            resetLadder()           // the levels moved with the threshold
         }
+    }
+
+    /// Forget the level crossings and peaks (adaptive arrival).
+    private func resetLadder() {
+        let K = GasAnalyzer.ladderLevels
+        ladderT.update(repeating: -1, count: count * K)
+        ladderRun.update(repeating: 0, count: count * K)
+        peak.update(repeating: 0, count: count)
+        arrivalA.update(repeating: -1, count: count)
+        adaptiveCount = 0
+        adaptiveSource = nil
+        adaptiveRegionArrived = [Int](repeating: 0, count: masks.count)
+        adaptiveRegionT = [Float?](repeating: nil, count: masks.count)
     }
 
     func update(regions newRegions: AnalysisRegions) {
@@ -214,6 +260,7 @@ final class GasAnalyzer {
         }
         resp.update(repeating: 0, count: count)
         run.update(repeating: 0, count: count)
+        ladderRun.update(repeating: 0, count: count * GasAnalyzer.ladderLevels)
         clearHistory()
         quietSince = nil
     }
@@ -229,7 +276,8 @@ final class GasAnalyzer {
     func resetArrivals(keepGhost: Bool) {
         if keepGhost, let s = currentSource {
             lastSource = s
-            lastArrival.update(from: arrival, count: count)
+            let shown: UnsafeMutablePointer<Float> = params.arrivalMode == .adaptive ? arrivalA : arrival
+            lastArrival.update(from: shown, count: count)
             hasLastArrival = true
         } else if !keepGhost {
             lastSource = nil
@@ -244,6 +292,7 @@ final class GasAnalyzer {
         quietSince = nil
         currentSource = nil
         resetRegionStats()
+        resetLadder()
     }
 
     // MARK: - Per frame
@@ -298,6 +347,8 @@ final class GasAnalyzer {
         let regionNeed = (0..<nReg).map { k in max(1, Int((params.regionArrivalFraction * Float(regionValid[k])).rounded(.up))) }
         for k in 0..<nReg { regionSum[k] = 0 }
         let maskBits = masks.bits
+        let K = GasAnalyzer.ladderLevels
+        let invK = 1 / Float(K)
 
         for i in 0..<count {
             if valid[i] == 0 {
@@ -321,6 +372,23 @@ final class GasAnalyzer {
                 m &= m - 1
             }
             if e > maxV { maxV = e; maxIdx = i }
+            if registerArrivals {
+                // ladder: first confirmed crossing of each level, and the peak
+                if e > peak[i] { peak[i] = e }
+                let th = thr[i]
+                let lb = i * K
+                var j = Int(ladderMin[i])
+                while j < K {
+                    if e > th * Float(j + 1) * invK {
+                        let c = ladderRun[lb + j]
+                        if c < 255 { ladderRun[lb + j] = c + 1 }
+                        if Int32(c) + 1 == confirm && ladderT[lb + j] < 0 { ladderT[lb + j] = t }
+                        j += 1
+                    } else {
+                        while j < K { ladderRun[lb + j] = 0; j += 1 }
+                    }
+                }
+            }
             if e > thr[i] {
                 activeN += 1
                 if !registerArrivals { continue }
@@ -358,18 +426,24 @@ final class GasAnalyzer {
                                      y: (Double(maxIdx / width) + 0.5) / Double(height))
         }
 
+        let adaptive = params.arrivalMode == .adaptive
+        if adaptive { updateAdaptive() }
+
         var stats = [RegionStat]()
         stats.reserveCapacity(nReg)
         for k in 0..<nReg {
             let n = max(1, regionValid[k])
+            let arrived = adaptive ? (k < adaptiveRegionArrived.count ? adaptiveRegionArrived[k] : 0) : regionArrived[k]
+            let at: Float? = adaptive ? (k < adaptiveRegionT.count ? adaptiveRegionT[k] : nil) : regionArrivalT[k]
             stats.append(RegionStat(meanResponse: regionSum[k] / Float(n),
-                                    arrivedFraction: Float(regionArrived[k]) / Float(n),
-                                    arrivalTime: regionArrivalT[k]))
+                                    arrivedFraction: Float(arrived) / Float(n),
+                                    arrivalTime: at))
         }
         result.regions = stats
         result.displayScale = updateScale(time: time)
 
-        currentSource = estimateSource()
+        currentSource = adaptive ? adaptiveSource : estimateSource()
+        let hasArrivals = adaptive ? adaptiveCount > 0 : !order.isEmpty
 
         // Auto re-arm after the plume has gone.
         if registerArrivals && !order.isEmpty && params.autoRearmSeconds > 0 {
@@ -386,8 +460,8 @@ final class GasAnalyzer {
         pushHistory(time: time)
         result.source = currentSource
         result.lastSource = lastSource
-        result.phase = order.isEmpty ? .monitoring : .detected
-        result.gasPresent = !order.isEmpty && result.activeFraction >= 0.002
+        result.phase = hasArrivals ? .detected : .monitoring
+        result.gasPresent = hasArrivals && result.activeFraction >= 0.002
         return result
     }
 
@@ -413,8 +487,12 @@ final class GasAnalyzer {
         ey /= ne
 
         // C: centroid of all reached pixels.
-        let cx = sumX / Double(n)
-        let cy = sumY / Double(n)
+        return makeSource(ex: ex, ey: ey, cx: sumX / Double(n), cy: sumY / Double(n), n: n,
+                          first: firstArrival ?? 0)
+    }
+
+    /// Direction, confidence and upstream point from E (earliest pixels) and C (all reached pixels).
+    private func makeSource(ex: Double, ey: Double, cx: Double, cy: Double, n: Int, first: Double) -> GasSource {
         let vx = ex - cx, vy = ey - cy
         let dist = (vx * vx + vy * vy).squareRoot()
         let plumeR = (Double(n) / Double.pi).squareRoot()
@@ -447,7 +525,127 @@ final class GasAnalyzer {
             mode: mode,
             angleDeg: atan2(-dy, dx) * 180 / Double.pi,
             arrivedCount: n,
-            firstArrival: firstArrival ?? 0)
+            firstArrival: first)
+    }
+
+    // MARK: - Adaptive arrival
+
+    /// Rebuilds the adaptive arrival map from the ladder. A pixel is reached when its peak is clear of
+    /// its noise (≥ 2 × its lowest usable level) and at least `adaptiveRelGate` of the plate's strong
+    /// response; its arrival is when it crossed min(50 % of its peak, its threshold), interpolated
+    /// between the two neighbouring levels. Nothing is reported before the fixed threshold has fired
+    /// somewhere, so this mode never creates a detection of its own.
+    private func updateAdaptive() {
+        let K = GasAnalyzer.ladderLevels
+        let invK = 1 / Float(K)
+        let nReg = masks.count
+        adaptiveCount = 0
+        adaptiveSource = nil
+        if adaptiveRegionArrived.count != nReg { adaptiveRegionArrived = [Int](repeating: 0, count: nReg) }
+        if adaptiveRegionT.count != nReg { adaptiveRegionT = [Float?](repeating: nil, count: nReg) }
+        for k in 0..<nReg { adaptiveRegionArrived[k] = 0; adaptiveRegionT[k] = nil }
+        guard let tFirst = firstArrival else {
+            arrivalA.update(repeating: -1, count: count)
+            return
+        }
+        let tMin = Float(tFirst) - GasAnalyzer.adaptiveWindow
+        let relGate = GasAnalyzer.adaptiveRelGate * percentile(of: peak, 0.90)
+
+        var n = 0
+        var sx = 0.0, sy = 0.0
+        var tLo = Float.greatestFiniteMagnitude, tHi = -Float.greatestFiniteMagnitude
+        for i in 0..<count {
+            arrivalA[i] = -1
+            if valid[i] == 0 { continue }
+            let th = thr[i]
+            let step = th * invK
+            let jm = Int(ladderMin[i])
+            let lmin = step * Float(jm + 1)
+            let a = peak[i]
+            if !(a >= 2 * lmin && a >= relGate && step > 0) { continue }
+            let target = max(min(0.5 * a, th), lmin)
+            let fj = target / step - 1
+            let j0 = max(jm, min(K - 1, Int(max(0, fj) + 1e-4)))
+            let lb = i * K
+            var tv = ladderT[lb + j0]
+            if tv < 0 { continue }                       // level not confirmed yet
+            if tv >= tMin {
+                if j0 < K - 1 {
+                    let tb = ladderT[lb + j0 + 1]
+                    if tb >= 0 { tv += max(0, min(1, fj - Float(j0))) * (tb - tv) }
+                }
+            } else {
+                // crossed long before the event (drift): the next level crossed inside the window
+                tv = -1
+                var j = j0 + 1
+                while j < K {
+                    let tj = ladderT[lb + j]
+                    if tj < 0 { break }
+                    if tj >= tMin { tv = tj; break }
+                    j += 1
+                }
+                if tv < 0 { continue }
+            }
+            arrivalA[i] = tv
+            n += 1
+            sx += Double(i % width) + 0.5
+            sy += Double(i / width) + 0.5
+            if tv < tLo { tLo = tv }
+            if tv > tHi { tHi = tv }
+        }
+        adaptiveCount = n
+        guard n > 0 else { return }
+
+        // time histogram: earliest 5 % (E) and the time each region counts as reached
+        let nb = 256
+        let binW = max((tHi - tLo) / Float(nb), 1e-4)
+        for k in 0..<nb { binN[k] = 0; binX[k] = 0; binY[k] = 0 }
+        if regionBins.count != nReg * nb { regionBins = [Int32](repeating: 0, count: nReg * nb) }
+        for k in 0..<(nReg * nb) { regionBins[k] = 0 }
+        let maskBits = masks.bits
+        for i in 0..<count {
+            let tv = arrivalA[i]
+            if tv < 0 { continue }
+            let bin = max(0, min(nb - 1, Int((tv - tLo) / binW)))
+            binN[bin] += 1
+            binX[bin] += Double(i % width) + 0.5
+            binY[bin] += Double(i / width) + 0.5
+            var m = maskBits[i]
+            while m != 0 {
+                let k = m.trailingZeroBitCount
+                if k < nReg {
+                    regionBins[k * nb + bin] += 1
+                    adaptiveRegionArrived[k] += 1
+                }
+                m &= m - 1
+            }
+        }
+        for k in 0..<nReg where k < regionValid.count {
+            let need = max(1, Int((params.regionArrivalFraction * Float(regionValid[k])).rounded(.up)))
+            guard adaptiveRegionArrived[k] >= need else { continue }
+            var acc = 0
+            for bin in 0..<nb {
+                acc += Int(regionBins[k * nb + bin])
+                if acc >= need {
+                    adaptiveRegionT[k] = tLo + Float(bin + 1) * binW
+                    break
+                }
+            }
+        }
+
+        let needTotal = max(20, Int(params.minArrivedFraction * Float(validCount)))
+        guard n >= needTotal else { return }
+        let ke = min(n, max(10, Int(0.05 * Double(n))))
+        var ex = 0.0, ey = 0.0, ne = 0
+        for bin in 0..<nb {
+            ne += Int(binN[bin])
+            ex += binX[bin]
+            ey += binY[bin]
+            if ne >= ke { break }
+        }
+        guard ne > 0 else { return }
+        adaptiveSource = makeSource(ex: ex / Double(ne), ey: ey / Double(ne), cx: sx / Double(n), cy: sy / Double(n),
+                                    n: n, first: Double(tLo))
     }
 
     // MARK: - Baseline
@@ -491,6 +689,10 @@ final class GasAnalyzer {
             let mu = max(mean[i], 1e-3)
             let sigmaPct = 100 * (max(m2[i], 0) / Float(n)).squareRoot() / mu
             thr[i] = max(params.minPercent, params.kSigma * sigmaPct)
+            // ladder levels below 3/4 of k·σ could be crossed by noise alone: skip them
+            let levels = Float(GasAnalyzer.ladderLevels)
+            let q = 0.75 * params.kSigma * sigmaPct / max(thr[i] / levels, 1e-6)
+            ladderMin[i] = q.isFinite ? UInt8(max(0, min(levels - 1, q.rounded(.up) - 1))) : UInt8(levels - 1)
             if i % 2 == 0 && saturationOK[i] != 0 && masks.bits[i] != 0 && sigmaPct.isFinite { noise.append(sigmaPct) }
         }
         noise.sort()
@@ -537,12 +739,15 @@ final class GasAnalyzer {
     // MARK: - Colour scale
 
     /// 99th percentile of the response over the valid pixels (0.05 % bins).
-    private func responsePercentile(_ q: Float) -> Float {
+    private func responsePercentile(_ q: Float) -> Float { percentile(of: resp, q) }
+
+    /// q-quantile of a per-pixel buffer of responses (%) over the valid pixels (0.05 % bins).
+    private func percentile(of buf: UnsafeMutablePointer<Float>, _ q: Float) -> Float {
         let nb = pctHist.count - 1
         for k in 0..<pctHist.count { pctHist[k] = 0 }
         var n: Int32 = 0
         for i in 0..<count where valid[i] != 0 {
-            let v = resp[i]
+            let v = buf[i]
             let bin = v.isFinite && v > 0 ? Int(min(Float(nb), v * 20)) : 0
             pctHist[bin] += 1
             n += 1
@@ -591,6 +796,7 @@ final class GasAnalyzer {
                 case .blue: v = B
                 case .luma: v = 0.2126 * R + 0.7152 * G + 0.0722 * B
                 case .redChroma: v = 100 * R / max(R + G + B, 1)
+                case .redBlueRatio: v = min(600, 100 * R / max(B, 1))
                 }
                 sig[y * width + x] = v
             }
@@ -674,8 +880,9 @@ final class GasAnalyzer {
                 rgba[o + 3] = UInt8(255 * alpha)
             }
         case .arrival:
-            let useLast = order.isEmpty && hasLastArrival
-            let src = useLast ? lastArrival : arrival
+            let adaptive = params.arrivalMode == .adaptive
+            let useLast = (adaptive ? adaptiveCount == 0 : order.isEmpty) && hasLastArrival
+            let src = useLast ? lastArrival : (adaptive ? arrivalA : arrival)
             var t0: Float = .greatestFiniteMagnitude
             for i in 0..<count where valid[i] != 0 && src[i] >= 0 { t0 = min(t0, src[i]) }
             let span = max(params.arrivalSpan, 0.01)

@@ -146,6 +146,10 @@ struct SettingsView: View {
                 ForEach(RecordSettings.bitratePresets, id: \.self) { b in Text("\(Int(b)) Mb/s").tag(b) }
             } label: { HelpLabel(L("比特率"), .bitrate) }
             .disabled(pipeline.isRecording)
+            if let w = pipeline.recordLoadWarning {
+                Label(w, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote).foregroundStyle(.orange)
+            }
             Toggle(L("录完存入相册"), isOn: $pipeline.recordSettings.saveToPhotos)
             Toggle(L("同时写 CSV 分析日志"), isOn: $pipeline.recordSettings.writeCSV)
             Toggle(L("录制声音（麦克风）"), isOn: $pipeline.recordSettings.recordAudio)
@@ -206,6 +210,9 @@ struct SettingsView: View {
             Picker(selection: $pipeline.params.polarity) {
                 ForEach(ResponsePolarity.allCases) { p in Text(L(p.label)).tag(p) }
             } label: { HelpLabel(L("响应方向"), .polarity) }
+            Picker(selection: $pipeline.params.arrivalMode) {
+                ForEach(ArrivalMode.allCases) { m in Text(L(m.label)).tag(m) }
+            } label: { HelpLabel(L("到达判定"), .arrivalMode) }
             ValueSlider(label: L("最小阈值"), value: $pipeline.params.minPercent, range: 0.2...10, help: .threshold) { String(format: "%.1f%%", $0) }
             ValueSlider(label: "k·σ", value: $pipeline.params.kSigma, range: 1...10, help: .kSigma) { String(format: "%.1f", $0) }
             Toggle(isOn: $pipeline.params.autoScale) { HelpLabel(L("自动色标"), .autoScale) }

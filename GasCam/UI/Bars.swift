@@ -6,20 +6,27 @@ struct GasStatusBar: View {
     @Binding var showGasPanel: Bool
     @State private var dismissedNoise: Float = -1
     @State private var dismissedChannels = ""
+    @State private var dismissedWeak = ""
 
     var body: some View {
         let r = pipeline.result
         VStack(spacing: 6) {
             if let rec = recommendedThreshold(r) {
-                suggestion(String(format: L("噪声 %.2f%% → 推荐检测阈值 %.1f%%（现在 %.1f%%）"),
+                suggestion(String(format: L("噪声 %.2f%% 偏大 → 建议把检测阈值调高到 %.1f%%（现在 %.1f%%）"),
                                   r.noiseMedianPercent, rec, pipeline.params.minPercent),
                            apply: { pipeline.params.minPercent = rec; dismissedNoise = r.noiseMedianPercent },
                            dismiss: { dismissedNoise = r.noiseMedianPercent })
+            } else if let weak = weakChannelThreshold(r) {
+                suggestion(String(format: L("%@ 通道的最大响应只有 %.1f%% → 建议把检测阈值调低到 %.1f%%（现在 %.1f%%）"),
+                                  pipeline.params.channel.shortName, weak.peak, weak.rec, pipeline.params.minPercent),
+                           apply: { pipeline.params.minPercent = weak.rec; dismissedWeak = weak.key },
+                           dismiss: { dismissedWeak = weak.key })
             }
             if let sug = channelSuggestion() {
-                suggestion(String(format: L("推荐信号通道 %@（信噪比 %@）"), sug.0.shortName, sug.1),
-                           apply: { pipeline.params.channel = sug.0.channel; dismissedChannels = sug.1 },
-                           dismiss: { dismissedChannels = sug.1 })
+                suggestion(String(format: L("推荐信号通道 %@（信噪比 %d；现在的 %@ 是 %d）"),
+                                  sug.best.shortName, sug.best.snr.safeInt, pipeline.params.channel.shortName, sug.mine.safeInt),
+                           apply: { pipeline.params.channel = sug.best.channel; dismissedChannels = sug.key },
+                           dismiss: { dismissedChannels = sug.key })
             }
             HStack(spacing: 8) {
                 phasePill(r)
@@ -69,7 +76,7 @@ struct GasStatusBar: View {
                 .frame(maxWidth: 270)
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text(String(format: "Δ %.2f%%  max %.1f%%", r.meanResponse, r.maxResponse))
+                    Text(String(format: "%@ %.2f%%  max %.1f%%", pipeline.params.channel.deltaLabel, r.meanResponse, r.maxResponse))
                     Text(String(format: "active %.1f%%  σ %.2f%%", r.activeFraction * 100, r.noiseMedianPercent))
                         .foregroundStyle(.gray)
                 }
@@ -82,7 +89,8 @@ struct GasStatusBar: View {
         .padding(.horizontal, 6)
     }
 
-    /// After a baseline: 8 × the measured pixel noise (rounded, 0.5–5 %), if it differs from the setting.
+    /// After a baseline: 8 × the measured pixel noise (≤ 5 %) when that is higher than the setting.
+    /// Only ever a higher threshold: a lower one makes noise look like gas.
     private func recommendedThreshold(_ r: GasFrameResult) -> Float? {
         switch r.phase {
         case .monitoring, .detected: break
@@ -90,16 +98,36 @@ struct GasStatusBar: View {
         }
         let s = r.noiseMedianPercent
         guard s > 0, s.isFinite, s != dismissedNoise else { return nil }
-        let rec = min(5, max(0.5, (8 * s * 10).rounded() / 10))
-        return abs(rec - pipeline.params.minPercent) >= 0.2 ? rec : nil
+        let rec = min(5, (8 * s * 10).rounded() / 10)
+        return rec >= pipeline.params.minPercent + 0.2 ? rec : nil
     }
 
-    /// Video: the channel with the best signal-to-noise, if it is not the one in use.
-    private func channelSuggestion() -> (ChannelScore, String)? {
+    /// Video: the channel in use changes less than the threshold can see (G and B respond much less
+    /// than R) → a threshold of a third of its largest change, never inside the noise.
+    private func weakChannelThreshold(_ r: GasFrameResult) -> (peak: Float, rec: Float, key: String)? {
+        guard case .file = pipeline.source,
+              let sc = pipeline.channelReport.first(where: { $0.channel == pipeline.params.channel }) else { return nil }
+        switch r.phase {
+        case .monitoring, .detected: break
+        default: return nil
+        }
+        let cur = pipeline.params.minPercent
+        let peak = sc.peakPercent
+        guard peak.isFinite, peak > 0, peak < 1.5 * cur, r.noiseMedianPercent.isFinite else { return nil }
+        let rec = max(0.2, 6 * r.noiseMedianPercent, (peak / 3 * 10).rounded() / 10)
+        let key = "\(sc.channel.rawValue) \(rec)"
+        guard rec <= cur - 0.2, key != dismissedWeak else { return nil }
+        return (peak, rec, key)
+    }
+
+    /// Video: another channel with a clearly better signal-to-noise (≥ 1.5 ×) than the one in use.
+    private func channelSuggestion() -> (best: ChannelScore, mine: Float, key: String)? {
         guard case .file = pipeline.source, let best = pipeline.channelReport.first,
               best.channel != pipeline.params.channel else { return nil }
-        let key = pipeline.channelReport.map { "\($0.shortName) \(Int($0.snr.rounded()))" }.joined(separator: " · ")
-        return key == dismissedChannels ? nil : (best, key)
+        let mine = pipeline.channelReport.first(where: { $0.channel == pipeline.params.channel })?.snr ?? 0
+        guard best.snr >= 1.5 * max(mine, 0.01) else { return nil }
+        let key = "\(best.shortName) \(best.snr.safeInt) \(mine.safeInt)"
+        return key == dismissedChannels ? nil : (best, mine, key)
     }
 
     private func suggestion(_ text: String, apply: @escaping () -> Void, dismiss: @escaping () -> Void) -> some View {

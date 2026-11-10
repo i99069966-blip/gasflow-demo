@@ -97,7 +97,11 @@ struct TopBar: View {
             Text(name).lineLimit(1).truncationMode(.middle)
             Spacer()
             Text(String(format: "%.2f / %.2f s", pipeline.playbackTime, pipeline.playbackDuration))
-            Text(String(format: "%.0f fps", pipeline.measuredFPS)).foregroundStyle(.gray)
+            if pipeline.videoFrameRate > 0 {
+                let f = pipeline.videoFrameRate
+                Text(abs(f - f.rounded()) < 0.06 ? "\(f.safeInt) fps" : String(format: "%.1f fps", f))
+                    .foregroundStyle(.gray)
+            }
         }
         .font(Theme.mono(12, .semibold))
         .foregroundStyle(.white)

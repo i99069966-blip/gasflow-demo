@@ -5,7 +5,7 @@ import CoreGraphics
 
 /// Which colour signal is used as the sensor response.
 enum SignalChannel: String, CaseIterable, Identifiable, Codable {
-    case red, green, blue, luma, redChroma
+    case red, green, blue, luma, redChroma, redBlueRatio
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -14,7 +14,23 @@ enum SignalChannel: String, CaseIterable, Identifiable, Codable {
         case .blue: return "B"
         case .luma: return "Y (亮度)"
         case .redChroma: return "r = R/(R+G+B)"
+        case .redBlueRatio: return "R/B (色比)"
         }
+    }
+    /// Short name for buttons, curve labels and reports.
+    var shortName: String {
+        switch self {
+        case .red: return "R"
+        case .green: return "G"
+        case .blue: return "B"
+        case .luma: return "Y"
+        case .redChroma: return "r"
+        case .redBlueRatio: return "R/B"
+        }
+    }
+    /// "ΔR/R" style name of the relative change of this signal.
+    var deltaLabel: String {
+        self == .redBlueRatio ? "Δ(R/B)" : "Δ\(shortName)/\(shortName)"
     }
     /// Signal value of a raw (0–255) colour.
     func value(r: Float, g: Float, b: Float) -> Float {
@@ -24,8 +40,21 @@ enum SignalChannel: String, CaseIterable, Identifiable, Codable {
         case .blue: return b
         case .luma: return 0.2126 * r + 0.7152 * g + 0.0722 * b
         case .redChroma: return 100 * r / max(r + g + b, 1)
+        // colour ratio: a brightness change scales R and B alike and cancels out
+        case .redBlueRatio: return min(600, 100 * r / max(b, 1))
         }
     }
+}
+
+/// How the arrival time of a pixel is decided.
+enum ArrivalMode: String, CaseIterable, Identifiable, Codable {
+    /// First time the response exceeds the detection threshold.
+    case threshold
+    /// First time the response exceeds half of the pixel's own peak (never above the detection
+    /// threshold): weakly responding pixels no longer look late.
+    case adaptive
+    var id: String { rawValue }
+    var label: String { self == .threshold ? "固定阈值" : "自适应" }
 }
 
 /// Sign of the expected optical change. The LSPR film in the test video shows R decreasing.
@@ -93,6 +122,8 @@ struct GasParams: Equatable, Codable {
     var autoScale: Bool = true
     /// A region counts as "reached" when this fraction of its pixels has been reached.
     var regionArrivalFraction: Float = 0.10
+    /// Arrival time of a pixel: fixed threshold, or half of its own peak response.
+    var arrivalMode: ArrivalMode = .threshold
 
     /// Changing these invalidates the baseline.
     func requiresRebaseline(comparedTo o: GasParams) -> Bool {
@@ -121,7 +152,7 @@ extension GasParams {
         get(.analysisRate, &analysisRate); get(.lockCameraOnBaseline, &lockCameraOnBaseline)
         get(.flowLagSeconds, &flowLagSeconds); get(.flowScalePercent, &flowScalePercent)
         get(.useReference, &useReference); get(.autoScale, &autoScale)
-        get(.regionArrivalFraction, &regionArrivalFraction)
+        get(.regionArrivalFraction, &regionArrivalFraction); get(.arrivalMode, &arrivalMode)
     }
 }
 
@@ -447,6 +478,8 @@ enum ChartMode: String, CaseIterable, Identifiable, Codable {
     case raw, response
     var id: String { rawValue }
     var label: String { self == .raw ? L("原始值") : "ΔS/S %" }
+    /// Label naming the signal channel in use ("ΔR/R %").
+    func label(_ channel: SignalChannel) -> String { self == .raw ? L("原始值") : channel.deltaLabel + " %" }
 }
 
 enum OverlayMode: String, CaseIterable, Identifiable, Codable {

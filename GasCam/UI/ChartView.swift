@@ -1,26 +1,52 @@
 import SwiftUI
 
-/// Live curve of the analysis regions: raw mean (R or the signal channel) or mean ΔS/S %.
+extension SignalChannel {
+    /// Curve colour of the channel.
+    var color: Color {
+        switch self {
+        case .red: return Color(red: 1, green: 0.35, blue: 0.3)
+        case .green: return Color(red: 0.3, green: 0.9, blue: 0.4)
+        case .blue: return Color(red: 0.35, green: 0.55, blue: 1)
+        case .luma: return Color(white: 0.9)
+        case .redChroma: return Color(red: 1, green: 0.6, blue: 0.55)
+        case .redBlueRatio: return Color(red: 0.85, green: 0.5, blue: 1)
+        }
+    }
+}
+
+/// Live curve of the analysis regions: raw value of the signal channel or mean ΔS/S %.
 /// Blue band = baseline, light blue = where a baseline would be taken from here, red band = gas detected.
+/// Pinch with two fingers to zoom the time axis.
 struct ChartPanel: View {
     @EnvironmentObject var pipeline: FramePipeline
     /// 0 = everything (whole video / whole live buffer).
-    private static let windows: [Double] = [10, 30, 60, 120, 0]
+    private static let windows: [Double] = [1, 2, 5, 10, 30, 60, 120, 0]
+    static let minWindow: Double = 0.5
     @State private var dragging = false
     @State private var dragSpan: ClosedRange<Double>?
+    @State private var dragStartTime: Double?
+    /// Visible seconds while pinching (committed to the settings when the fingers lift).
+    @State private var pinchWindow: Double?
+    @State private var pinchBase: Double?
+    /// The drag that belongs to a pinch must not move the playhead.
+    @State private var suppressDrag = false
+    @State private var lastPinch = Date.distantPast
 
     private var isFile: Bool {
         if case .file = pipeline.source { return true }
         return false
     }
 
-    static func windowLabel(_ w: Double) -> String { w <= 0 ? L("全部") : "\(Int(w))s" }
+    static func windowLabel(_ w: Double) -> String {
+        if w <= 0 { return L("全部") }
+        return w == w.rounded() ? "\(Int(w))s" : String(format: "%.1fs", w)
+    }
 
     var body: some View {
         let file = isFile
         let samples = file ? pipeline.videoCurve : pipeline.chart
         let opt = pipeline.display
-        let window = file ? opt.videoChartWindow : opt.chartWindow
+        let window = pinchWindow ?? (file ? opt.videoChartWindow : opt.chartWindow)
         let playhead: Double? = file ? (pipeline.scrubTime ?? pipeline.playbackTime) : nil
         let span: ClosedRange<Double>? = file
             ? (dragSpan ?? Self.span(duration: pipeline.playbackDuration, window: window, playhead: playhead ?? 0))
@@ -33,16 +59,19 @@ struct ChartPanel: View {
         }()
         let nReg = samples.last?.regions.count ?? 0
         let scrubHandler: ((Double, LiveChart.ScrubPhase) -> Void)? = file ? { t, phase in scrub(t, phase, span) } : nil
+        let full: Double = file ? pipeline.playbackDuration
+                                : max(0, (samples.last?.t ?? 0) - (samples.first?.t ?? 0))
+        let ch = pipeline.params.channel
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Picker("", selection: $pipeline.display.chartMode) {
-                    ForEach(ChartMode.allCases) { m in Text(m.label).tag(m) }
+                    ForEach(ChartMode.allCases) { m in Text(m.label(ch)).tag(m) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 150)
+                .frame(width: 168)
                 if opt.chartMode == .raw && nReg <= 1 {
                     Button { pipeline.display.chartShowGB.toggle() } label: {
-                        Text("G B").font(Theme.mono(11, .bold))
+                        Text("RGB").font(Theme.mono(11, .bold))
                             .foregroundStyle(opt.chartShowGB ? .black : .white)
                             .padding(.horizontal, 6).padding(.vertical, 3)
                             .background(opt.chartShowGB ? Theme.accent : Color.white.opacity(0.12))
@@ -72,8 +101,9 @@ struct ChartPanel: View {
             }
             if nReg > 1 { legend(nReg) }
             LiveChart(samples: samples, mode: opt.chartMode, window: window, showGB: opt.chartShowGB,
-                      channel: pipeline.params.channel, playhead: playhead, span: span, preview: preview,
-                      onScrub: scrubHandler)
+                      channel: ch, playhead: playhead, span: span, preview: preview,
+                      onScrub: scrubHandler,
+                      onZoom: { scale, ended in zoom(scale, ended, file: file, full: full, current: window) })
                 .frame(height: 86)
         }
         .padding(8)
@@ -86,16 +116,54 @@ struct ChartPanel: View {
         let tt = min(max(0, t), pipeline.playbackDuration)
         switch phase {
         case .changed:
+            if pinchBase != nil && Date().timeIntervalSince(lastPinch) > 0.7 {
+                // a pinch that never reported its end: finish it here
+                if let w = pinchWindow {
+                    if isFile { pipeline.display.videoChartWindow = w } else { pipeline.display.chartWindow = w }
+                }
+                pinchWindow = nil
+                pinchBase = nil
+                suppressDrag = false
+            }
+            if suppressDrag || pinchBase != nil { return }
             if !dragging {
                 dragging = true
+                dragStartTime = pipeline.playbackTime
                 dragSpan = span          // keep the visible range still while dragging
                 pipeline.beginScrub()
             }
             pipeline.scrub(to: tt)
         case .ended:
-            if dragging { pipeline.endScrub(at: tt) }
+            if dragging && !suppressDrag { pipeline.endScrub(at: tt) }
+            suppressDrag = false
             dragging = false
             dragSpan = nil
+        }
+    }
+
+    /// Two-finger pinch: spread = fewer seconds visible. `full` = everything there is (video length /
+    /// live buffer); at or beyond it the window becomes "all".
+    private func zoom(_ scale: CGFloat, _ ended: Bool, file: Bool, full: Double, current: Double) {
+        lastPinch = Date()
+        if pinchBase == nil {
+            pinchBase = current > 0 ? current : max(full, Self.minWindow)
+            suppressDrag = true
+            if dragging {                    // the first finger started a scrub: put the playhead back
+                pipeline.endScrub(at: dragStartTime ?? pipeline.playbackTime)
+                dragging = false
+                dragSpan = nil
+            }
+        }
+        guard let base = pinchBase, base > 0, scale.isFinite, scale > 0 else { return }
+        let w = max(Self.minWindow, base / Double(scale))
+        let value: Double = (full > 0 && w >= full) ? 0 : (w >= 10 ? w.rounded() : (w * 10).rounded() / 10)
+        if ended {
+            if file { pipeline.display.videoChartWindow = value } else { pipeline.display.chartWindow = value }
+            pinchWindow = nil
+            pinchBase = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { suppressDrag = false }
+        } else {
+            pinchWindow = value
         }
     }
 
@@ -135,7 +203,9 @@ struct ChartPanel: View {
         if let cur = sample {
             VStack(alignment: .trailing, spacing: 0) {
                 if mode == .raw {
-                    Text(String(format: "R %.2f", cur.r)).foregroundStyle(Color(red: 1, green: 0.35, blue: 0.3))
+                    let ch = pipeline.params.channel
+                    Text(String(format: "%@ %.2f", ch.shortName, ch.value(r: cur.r, g: cur.g, b: cur.b)))
+                        .foregroundStyle(ch.color)
                 } else {
                     Text(String(format: "%+.2f%%", cur.response)).foregroundStyle(Theme.accent)
                 }
@@ -149,13 +219,14 @@ struct ChartPanel: View {
         }
     }
 
-    /// Peak-to-peak variation of the mean R over the last second, in % — light flicker shows up here.
+    /// Peak-to-peak variation of the mean brightness over the last second, in % — light flicker shows up here.
     static func ripple(_ s: [ChartSample]) -> Double {
         guard let last = s.last else { return 0 }
         var lo = Float.greatestFiniteMagnitude, hi = -Float.greatestFiniteMagnitude, sum: Float = 0, n: Float = 0
         for p in s.reversed() {
             if last.t - p.t > 1 { break }
-            lo = min(lo, p.r); hi = max(hi, p.r); sum += p.r; n += 1
+            let y = SignalChannel.luma.value(r: p.r, g: p.g, b: p.b)
+            lo = min(lo, y); hi = max(hi, y); sum += y; n += 1
         }
         guard n > 1, sum > 0 else { return 0 }
         return Double((hi - lo) / (sum / n) * 100)
@@ -178,6 +249,8 @@ struct LiveChart: View {
     var preview: ClosedRange<Double>? = nil
     /// Video mode: dragging on the chart moves the playhead.
     var onScrub: ((Double, ScrubPhase) -> Void)? = nil
+    /// Two-finger pinch: (magnification, ended).
+    var onZoom: ((CGFloat, Bool) -> Void)? = nil
 
     private static let leftPad: CGFloat = 34
 
@@ -204,6 +277,9 @@ struct LiveChart: View {
                         onScrub(time(at: v.location.x, width: geo.size.width, r.0, r.1), .ended)
                     },
                     including: onScrub == nil ? .subviews : .all)
+                .simultaneousGesture(MagnifyGesture()
+                    .onChanged { v in onZoom?(v.magnification, false) }
+                    .onEnded { v in onZoom?(v.magnification, true) })
         }
         .clipShape(RoundedRectangle(cornerRadius: 6))
     }
@@ -244,9 +320,11 @@ struct LiveChart: View {
             if mode == .raw {
                 if multi {
                     for c in p.regions { let v = rawValue(c); lo = min(lo, v); hi = max(hi, v) }
+                } else if showGB {
+                    lo = min(lo, p.r, p.g, p.b); hi = max(hi, p.r, p.g, p.b)
                 } else {
-                    lo = min(lo, p.r); hi = max(hi, p.r)
-                    if showGB { lo = min(lo, p.g, p.b); hi = max(hi, p.g, p.b) }
+                    let v = channel.value(r: p.r, g: p.g, b: p.b)
+                    lo = min(lo, v); hi = max(hi, v)
                 }
             } else if p.phase >= 2 {
                 if multi {
@@ -311,9 +389,10 @@ struct LiveChart: View {
             z.move(to: CGPoint(x: leftPad, y: y(0))); z.addLine(to: CGPoint(x: size.width, y: y(0)))
             ctx.stroke(z, with: .color(.white.opacity(0.35)), lineWidth: 0.8)
         }
-        ctx.draw(Text(String(format: "%.1fs", max(0, tStart))).font(Theme.mono(8)).foregroundColor(.gray),
+        let tf = shownWindow < 5 ? "%.2fs" : "%.1fs"
+        ctx.draw(Text(String(format: tf, max(0, tStart))).font(Theme.mono(8)).foregroundColor(.gray),
                  at: CGPoint(x: leftPad + 2, y: size.height - 5), anchor: .leading)
-        ctx.draw(Text(String(format: "%.1fs", tEnd)).font(Theme.mono(8)).foregroundColor(.gray),
+        ctx.draw(Text(String(format: tf, tEnd)).font(Theme.mono(8)).foregroundColor(.gray),
                  at: CGPoint(x: size.width - 2, y: size.height - 5), anchor: .trailing)
 
         // curves
@@ -336,10 +415,13 @@ struct LiveChart: View {
             }
         } else if mode == .raw {
             if showGB {
-                ctx.stroke(curve({ $0.g }), with: .color(Color(red: 0.3, green: 0.9, blue: 0.4)), lineWidth: 1)
-                ctx.stroke(curve({ $0.b }), with: .color(Color(red: 0.35, green: 0.55, blue: 1)), lineWidth: 1)
+                // R, G, B together; the channel in use is drawn thicker
+                ctx.stroke(curve({ $0.b }), with: .color(SignalChannel.blue.color), lineWidth: channel == .blue ? 1.8 : 1)
+                ctx.stroke(curve({ $0.g }), with: .color(SignalChannel.green.color), lineWidth: channel == .green ? 1.8 : 1)
+                ctx.stroke(curve({ $0.r }), with: .color(SignalChannel.red.color), lineWidth: channel == .red ? 1.8 : 1)
+            } else {
+                ctx.stroke(curve({ channel.value(r: $0.r, g: $0.g, b: $0.b) }), with: .color(channel.color), lineWidth: 1.6)
             }
-            ctx.stroke(curve({ $0.r }), with: .color(Color(red: 1, green: 0.35, blue: 0.3)), lineWidth: 1.6)
         } else {
             ctx.stroke(curve({ $0.phase >= 2 ? $0.response : nil }), with: .color(Theme.accent), lineWidth: 1.6)
         }
@@ -372,14 +454,14 @@ struct GasQuickPanel: View {
                 String(format: "%.2f s", $0)
             }
             BaselineFramesRow()
-            if case .file = pipeline.source, !pipeline.channelReport.isEmpty {
-                HStack(spacing: 0) {
-                    Text(L("通道信噪比") + "：" + pipeline.channelReport.map { "\($0.shortName) \(Int($0.snr.rounded()))" }
-                        .joined(separator: " · "))
-                        .font(Theme.mono(11)).foregroundStyle(.gray)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                    InfoButton(.channel)
+            ChannelRow()
+            HStack(spacing: 6) {
+                Text(L("到达判定")).font(Theme.mono(11)).foregroundStyle(.gray)
+                Picker("", selection: $pipeline.params.arrivalMode) {
+                    ForEach(ArrivalMode.allCases) { m in Text(L(m.label)).tag(m) }
                 }
+                .pickerStyle(.segmented)
+                InfoButton(.arrivalMode)
             }
             ValueSlider(label: L("检测阈值"), value: $pipeline.params.minPercent, range: 0.2...10, help: .threshold) {
                 String(format: "%.1f%%", $0)
@@ -413,6 +495,42 @@ struct GasQuickPanel: View {
         .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 6)
+    }
+}
+
+/// Signal channel buttons. After a video has been scanned each one shows its signal-to-noise.
+struct ChannelRow: View {
+    @EnvironmentObject var pipeline: FramePipeline
+
+    var body: some View {
+        let scores = Dictionary(pipeline.channelReport.map { ($0.channel, $0.snr) }, uniquingKeysWith: { a, _ in a })
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Text(L("通道")).font(Theme.mono(11)).foregroundStyle(.gray)
+                ForEach(SignalChannel.allCases) { c in
+                    let on = pipeline.params.channel == c
+                    Button { pipeline.params.channel = c } label: {
+                        VStack(spacing: 0) {
+                            Text(c.shortName).font(Theme.mono(12, .bold))
+                            if let s = scores[c] {
+                                Text("\(s.safeInt)").font(Theme.mono(8))
+                                    .foregroundStyle(on ? Color.black.opacity(0.7) : Color.gray)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 28)
+                        .foregroundStyle(on ? Color.black : Color.white)
+                        .background(on ? Theme.accent : Color.white.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                    }
+                    .buttonStyle(.plain)
+                }
+                InfoButton(.channel)
+            }
+            if !scores.isEmpty {
+                Text(L("小数字 = 这段视频里该通道的信噪比（越大越好）"))
+                    .font(Theme.mono(9)).foregroundStyle(.gray)
+            }
+        }
     }
 }
 

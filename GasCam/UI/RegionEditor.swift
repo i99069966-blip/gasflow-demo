@@ -433,6 +433,8 @@ struct ColorBarView: View {
     let scale: Float
     let flowScale: Float
     let arrivalSpan: Float
+    var channel: SignalChannel = .red
+    var adaptive = false
 
     private static let turbo: Gradient = {
         let lut = Colormap.turbo
@@ -457,7 +459,16 @@ struct ColorBarView: View {
                 return (Self.turbo, "", "")
             }
         }()
+        let name: String = {
+            switch mode {
+            case .heat: return channel.deltaLabel
+            case .flow: return channel.shortName
+            case .arrival: return adaptive ? L("到达·自适应") : L("到达")
+            case .live: return ""
+            }
+        }()
         HStack(spacing: 4) {
+            Text(name).foregroundStyle(Theme.accent)
             Text(lo)
             LinearGradient(gradient: grad, startPoint: .leading, endPoint: .trailing)
                 .frame(width: 70, height: 7)

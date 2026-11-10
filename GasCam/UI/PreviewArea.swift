@@ -101,7 +101,8 @@ struct PreviewOverlay: View {
                 }
                 if opt.showColorBar && opt.overlay != .live && pipeline.result.phase != .waiting {
                     ColorBarView(mode: opt.overlay, scale: r.displayScale,
-                                 flowScale: pipeline.params.flowScalePercent, arrivalSpan: pipeline.params.arrivalSpan)
+                                 flowScale: pipeline.params.flowScalePercent, arrivalSpan: pipeline.params.arrivalSpan,
+                                 channel: pipeline.params.channel, adaptive: pipeline.params.arrivalMode == .adaptive)
                 }
                 if pipeline.regions.isEmpty && !editROI {
                     Text(L("请先画框（点 ROI）· 现在按整个画面分析"))

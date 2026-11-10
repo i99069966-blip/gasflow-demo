@@ -8,6 +8,7 @@ enum HelpTopic: String, CaseIterable {
     case directionConf, autoRearm, baselineTracking, baselineSeconds, arrivalSpan, regionArrival
     case useReference, autoScale, displayMax, flowLag, flowScale, overlayOpacity, blackBackground
     case lockOnBaseline, zebraLevel, peaking
+    case arrivalMode
 
     var title: String {
         switch self {
@@ -49,6 +50,7 @@ enum HelpTopic: String, CaseIterable {
         case .lockOnBaseline: return L("取基线时锁定 AE/AWB/AF")
         case .zebraLevel: return L("斑马阈值")
         case .peaking: return L("峰值灵敏")
+        case .arrivalMode: return L("到达判定")
         }
     }
 
@@ -78,10 +80,10 @@ enum HelpTopic: String, CaseIterable {
                            L("一般 30–60 fps；气体来得很快时 120 fps。"))
         case .resolution: return (L("录像的像素数。"),
                                   L("分析网格固定为 144×256，分辨率主要影响录像。"),
-                                  L("1080p 就够了。"))
+                                  L("1080p 或 720p。4K 负担重，容易丢帧。"))
         case .bitrate: return (L("录像每秒用多少数据。"),
                                L("越高，压缩损失越小，文件越大。"),
-                               L("录像以后还要分析：1080p30 用 50–80 Mb/s，120 fps 用 120–200 Mb/s。"))
+                               L("1080p30 或 720p60 用 50 Mb/s 就够。再高只是文件更大，还更容易丢帧。"))
         case .codec: return (L("录像的压缩方式。"),
                              L("H.264 兼容性好；HEVC 同样画质文件更小。"),
                              L("都可以；在电脑上分析时 H.264 更省事。"))
@@ -96,13 +98,13 @@ enum HelpTopic: String, CaseIterable {
                                       L("100%；长时间实验手机发热时 60–80%。"))
         case .channel: return (L("用哪个颜色的变化来检测气体。"),
                                L("—"),
-                               L("选变化最大、噪声最小的通道。视频分析后 App 会推荐。你的基板是 R。"))
+                               L("选变化最大、噪声最小的通道。视频分析后 App 会推荐。你的基板是 R；灯光不稳又没有参考框时用 R/B（色比，不受亮度变化影响）。"))
         case .polarity: return (L("气体让信号变小还是变大。"),
                                 L("—"),
                                 L("你的基板 R 下降 → 选“下降”。不确定时选“双向”。"))
         case .threshold: return (L("像素的变化超过这个比例才算有气体。"),
                                  L("高：不容易误报，但弱的气体检测不到。"),
-                                 L("设成预期最大响应的约 1/3。取完基线后 App 会推荐一个值。默认 2%。"))
+                                 L("设成预期最大响应的约 1/3。噪声偏大时 App 会建议调高。默认 2%。"))
         case .kSigma: return (L("变化还要超过这个像素噪声的 k 倍。"),
                               L("高：误报更少。"),
                               L("4；噪声大时 5–6。"))
@@ -169,6 +171,9 @@ enum HelpTopic: String, CaseIterable {
         case .peaking: return (L("边缘多清楚才描红。"),
                                L("低：描红的地方更多。"),
                                L("0.2 左右。"))
+        case .arrivalMode: return (L("怎样决定每个像素的“到达时刻”。"),
+                                   L("—"),
+                                   L("固定阈值：响应超过检测阈值的时刻；响应弱的地方会显得晚。自适应：超过“自己最大响应的一半”的时刻（不高于检测阈值），弱的地方不再显得晚，到达图更完整，但要等气体基本到齐才稳定。可以随时切换比较。"))
         }
     }
 

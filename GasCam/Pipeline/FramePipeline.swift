@@ -49,6 +49,8 @@ final class FramePipeline: ObservableObject {
     }
     @Published var playbackSpeed: Double = 1 { didSet { fileSource.speed = playbackSpeed } }
     @Published var toast: String?
+    /// Frame rate of the opened video file (0 = none).
+    @Published private(set) var videoFrameRate: Double = 0
 
     @Published var params: GasParams {
         didSet {
@@ -57,11 +59,12 @@ final class FramePipeline: ObservableObject {
             procLock.lock(); procParams = params; paramsDirty = true; procLock.unlock()
             updateEffectiveRate()
             if params.channel != oldValue.channel {
-                if case .file = source { scheduleRescan() }
+                channelChanged()
             } else if params.polarity != oldValue.polarity || params.useReference != oldValue.useReference
                         || params.autoScale != oldValue.autoScale || params.minPercent != oldValue.minPercent {
                 rebuildVideoCurve()
             }
+            if params.arrivalMode != oldValue.arrivalMode { refreshPausedVideo() }
         }
     }
     /// Analysis regions + reference box. Empty = whole frame.
@@ -82,6 +85,7 @@ final class FramePipeline: ObservableObject {
                 camera.setAudio(enabled: display.showAudioMeter || recordSettings.recordAudio)
             }
             procLock.lock(); procDisplay = display; procLock.unlock()
+            if display.overlay != oldValue.overlay { refreshPausedVideo() }
         }
     }
     @Published var recordSettings: RecordSettings {
@@ -172,6 +176,7 @@ final class FramePipeline: ObservableObject {
         fileSource.onLoaded = { [weak self] fps, dur in
             guard let self else { return }
             self.fileFPS = fps
+            self.videoFrameRate = fps
             self.playbackDuration = dur
             self.updateEffectiveRate()
             self.startScan()
@@ -226,6 +231,53 @@ final class FramePipeline: ObservableObject {
         } else {
             queue()
         }
+    }
+
+    /// Another signal channel invalidates the baseline. Video: scan again and run the detection again
+    /// from where the baseline was taken. Camera: the baseline restarts by itself; say so.
+    private func channelChanged() {
+        let name = params.channel.shortName
+        if case .file = source {
+            scheduleRescan()
+            reanalyzeVideo()
+            toast = String(format: L("已切换到 %@ 通道，从基线位置重新分析"), name)
+        } else {
+            procLock.lock(); let on = armed; procLock.unlock()
+            if on {
+                toast = String(format: L("已切换到 %@ 通道，正在重新取基线（这时不要通气）"), name)
+            } else {
+                toast = String(format: L("已切换到 %@ 通道"), name)
+            }
+        }
+    }
+
+    /// Video: take the baseline again at the place it was taken before and play on from there.
+    private func reanalyzeVideo() {
+        guard case .file = source else { return }
+        let b0 = min(max(0, marks.baselineStart ?? 0), max(0, playbackDuration))
+        marks = VideoMarks()
+        procLock.lock()
+        procMarks = VideoMarks()
+        armed = true
+        pendingRebaseline = true
+        pendingSeekReset = false
+        forceAnalyze = true
+        lastAnalysisT = -1
+        lastPublishT = -1
+        lastDisplayT = -1
+        procLock.unlock()
+        rebuildVideoCurve()
+        scrubTime = nil
+        playbackFinished = false
+        playbackTime = b0
+        fileSource.seek(to: b0, preroll: 0)
+        if playbackPaused { playbackPaused = false }
+    }
+
+    /// A paused video gets no new frames: analyse the current one again so a changed setting shows.
+    private func refreshPausedVideo() {
+        guard case .file = source, playbackPaused, scrubTime == nil, !playbackFinished else { return }
+        seekVideo(to: playbackTime)
     }
 
     /// Stop detection (back to the waiting state).
@@ -299,8 +351,24 @@ final class FramePipeline: ObservableObject {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
+    /// Megapixels per second the camera delivers at the current resolution and frame rate.
+    var recordPixelRate: Double {
+        Double(camera.resolution.width * camera.resolution.height) * camera.frameRate / 1_000_000
+    }
+
+    /// Text shown when the recording settings are likely to drop frames (nil = fine).
+    /// Measured on an iPhone 12 mini: 720p60 (55 MP/s) kept every frame, 4K60 (498 MP/s) kept a quarter.
+    var recordLoadWarning: String? {
+        let rate = recordPixelRate
+        guard rate > 130 else { return nil }
+        let what = "\(camera.resolution.label) \(Int(camera.frameRate.rounded())) fps"
+        return rate > 300 ? String(format: L("%@ 负担很重，很可能丢帧。建议 1080p 或 720p。"), what)
+                          : String(format: L("%@ 负担较重，可能丢帧。录完请看提示的实际帧率。"), what)
+    }
+
     func startRecording() {
         guard source == .camera, !isRecording else { return }
+        if let w = recordLoadWarning { toast = w }
         let stamp = Self.stampFormatter.string(from: Date())
         let base = Self.documentsURL.appendingPathComponent("GasCam_\(stamp)")
         let movURL = base.appendingPathExtension("mov")
@@ -355,6 +423,7 @@ final class FramePipeline: ObservableObject {
         lg?.close()
 
         let toPhotos = recordSettings.saveToPhotos
+        let setFPS = camera.frameRate
         camera.videoQueue.async {
             let dropped = self.recorder.framesDropped
             let written = self.recorder.framesWritten
@@ -365,8 +434,13 @@ final class FramePipeline: ObservableObject {
                         let bytes = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.doubleValue ?? 0
                         let mbps = duration > 0 ? bytes * 8 / duration / 1_000_000 : 0
                         let fps = duration > 0 ? Double(written) / duration : 0
-                        self.toast = L("已保存") + " \(url.lastPathComponent)\n"
+                        var text = L("已保存") + " \(url.lastPathComponent)\n"
                             + String(format: L("实际码率 %.1f Mb/s · 实际帧率 %.1f fps · 丢帧 %d"), mbps, fps, dropped)
+                        if duration > 1, setFPS > 1, fps < 0.9 * setFPS {
+                            text += "\n" + String(format: L("⚠︎ 只录到设定帧率 %.0f fps 的 %d%%：请降低分辨率或帧率"),
+                                                  setFPS, Int((100 * fps / setFPS).rounded()))
+                        }
+                        self.toast = text
                         if toPhotos { self.saveVideoToPhotos(url) }
                     } else {
                         self.toast = L("录制失败") + ": \(err ?? L("未知错误"))"
@@ -431,6 +505,7 @@ final class FramePipeline: ObservableObject {
         videoScale = nil
         channelReport = []
         scanProgress = 0
+        videoFrameRate = 0
         marks = VideoMarks()
         scrubTime = nil
         currentFileURL = url
@@ -632,7 +707,7 @@ final class FramePipeline: ObservableObject {
         let after = samples.filter { $0.t > b1 }
         guard base.count >= 5, after.count >= 5 else { return [] }
         let nReg = samples.first?.regions.count ?? 0
-        let candidates: [SignalChannel] = [.red, .green, .blue, .redChroma]
+        let candidates: [SignalChannel] = [.red, .green, .blue, .luma, .redChroma, .redBlueRatio]
         var out: [ChannelScore] = []
         for ch in candidates {
             var best = ChannelScore(channel: ch, snr: 0, peakPercent: 0)
@@ -716,6 +791,7 @@ final class FramePipeline: ObservableObject {
         videoCurve = []
         scrubTime = nil
         currentFileURL = nil
+        videoFrameRate = 0
         source = .camera
         updateEffectiveRate()
         result = GasFrameResult()
@@ -770,16 +846,19 @@ final class FramePipeline: ObservableObject {
         let t = pts.seconds
         guard t.isFinite else { return }
 
-        // measured frame rate
-        if fpsT0 < 0 || t < fpsT0 {
-            fpsT0 = t
-            fpsN = 0
-        }
-        fpsN += 1
-        if t - fpsT0 >= 1 {
-            fpsValue = Double(fpsN - 1) / (t - fpsT0)
-            fpsT0 = t
-            fpsN = 1
+        // measured frame rate of the camera (a video shows its own frame rate instead:
+        // seeking and stepping would make a count over video time meaningless)
+        if fromCamera {
+            if fpsT0 < 0 || t < fpsT0 || t - fpsT0 > 3 {
+                fpsT0 = t
+                fpsN = 0
+            }
+            fpsN += 1
+            if t - fpsT0 >= 1 {
+                fpsValue = Double(fpsN - 1) / (t - fpsT0)
+                fpsT0 = t
+                fpsN = 1
+            }
         }
 
         // (re)create the analysis grid for this frame size
@@ -1205,13 +1284,5 @@ struct ChannelScore: Equatable {
     let peakPercent: Float
 
     /// Short channel name for the report.
-    var shortName: String {
-        switch channel {
-        case .red: return "R"
-        case .green: return "G"
-        case .blue: return "B"
-        case .luma: return "Y"
-        case .redChroma: return "r"
-        }
-    }
+    var shortName: String { channel.shortName }
 }
