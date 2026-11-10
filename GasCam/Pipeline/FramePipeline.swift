@@ -153,6 +153,10 @@ final class FramePipeline: ObservableObject {
     private var lastDisplayT: Double = -1
     private var procBaselineTarget = 30
     private var procMarks = VideoMarks()
+    /// After a jump that restarts the analysis: drop file frames that are not from around this time
+    /// (one frame of the old position can still be in flight).
+    private var awaitFileTime: Double?
+    private var awaitDropped = 0
 
     init(camera: CameraController) {
         self.camera = camera
@@ -265,6 +269,8 @@ final class FramePipeline: ObservableObject {
         lastAnalysisT = -1
         lastPublishT = -1
         lastDisplayT = -1
+        awaitFileTime = b0
+        awaitDropped = 0
         procLock.unlock()
         rebuildVideoCurve()
         scrubTime = nil
@@ -495,6 +501,7 @@ final class FramePipeline: ObservableObject {
         lastChartT = -1
         procMarks = VideoMarks()
         procVideoScale = nil
+        awaitFileTime = nil
         procLock.unlock()
         renderer?.clear()
         chart = []
@@ -534,6 +541,7 @@ final class FramePipeline: ObservableObject {
         lastAnalysisT = -1
         lastPublishT = -1
         lastDisplayT = -1
+        awaitFileTime = nil
         procLock.unlock()
         playbackFinished = false
         playbackTime = target
@@ -839,6 +847,14 @@ final class FramePipeline: ObservableObject {
         procLock.lock()
         defer { procLock.unlock() }
         guard fromCamera ? acceptCamera : acceptFile else { return }
+        if !fromCamera, let target = awaitFileTime {
+            let ts = pts.seconds
+            if ts.isFinite && (ts < target - 0.5 || ts > target + 1) && awaitDropped < 30 {
+                awaitDropped += 1
+                return
+            }
+            awaitFileTime = nil
+        }
 
         if fromCamera { recorder.append(pb, time: pts) }
         if !preroll { renderer?.enqueue(pb) }
