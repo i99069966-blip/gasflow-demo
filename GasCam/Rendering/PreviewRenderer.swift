@@ -39,6 +39,8 @@ struct DisplayOptions: Equatable, Codable {
     var blackBackground = false
     /// Experiment step bar (camera mode).
     var showSteps = true
+    /// Curve panel moved up by the user (points, ≤ 0; 0 = its normal place above the status bar).
+    var chartOffsetY: Double = 0
 }
 
 extension DisplayOptions {
@@ -57,7 +59,7 @@ extension DisplayOptions {
         get(.chartWindow, &chartWindow); get(.videoChartWindow, &videoChartWindow)
         get(.chartShowGB, &chartShowGB); get(.showAudioMeter, &showAudioMeter); get(.showColorBar, &showColorBar)
         get(.keepLastResult, &keepLastResult); get(.blackBackground, &blackBackground)
-        get(.showSteps, &showSteps)
+        get(.showSteps, &showSteps); get(.chartOffsetY, &chartOffsetY)
     }
 }
 

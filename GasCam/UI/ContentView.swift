@@ -10,6 +10,8 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var editROI = false
     @State private var showGasPanel = false
+    /// Top of the preview in the "stage" coordinate space (the curve panel can be moved up to here).
+    @State private var previewTop: CGFloat = 0
     @StateObject private var regionEdit = RegionEditState()
 
     var body: some View {
@@ -44,7 +46,7 @@ struct ContentView: View {
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         if pipeline.display.showChart && !editROI {
-                            ChartPanel()
+                            ChartPanel(minTop: previewTop + 4)
                         }
                         GasStatusBar(showGasPanel: $showGasPanel)
                         if pipeline.source == .camera {
@@ -57,6 +59,12 @@ struct ContentView: View {
                     .opacity(editROI ? 0 : 1)
                     .allowsHitTesting(!editROI)
                 }
+                .background(GeometryReader { g in
+                    let top = g.frame(in: .named("stage")).minY
+                    Color.clear
+                        .onAppear { previewTop = top }
+                        .onChange(of: top) { _, v in previewTop = v }
+                })
                 .overlay(alignment: .topTrailing) {
                     if !editROI {
                         AssistColumn(editROI: $editROI,
@@ -85,6 +93,7 @@ struct ContentView: View {
                 permissionView
             }
         }
+        .coordinateSpace(.named("stage"))
         .environmentObject(regionEdit)
         .onChange(of: editROI) { _, on in
             if on { activeControl = nil; showGasPanel = false }

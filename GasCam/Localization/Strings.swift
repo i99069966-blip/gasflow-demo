@@ -394,5 +394,6 @@ enum Strings {
         "R/B (色比)": ("R/B (色比)", "R/B (colour ratio)"),
         "固定阈值": ("固定閾値", "Fixed threshold"),
         "自适应": ("適応", "Adaptive"),
+        "移动曲线": ("グラフを移動", "Move chart"),
     ]
 }

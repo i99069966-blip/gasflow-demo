@@ -16,9 +16,15 @@ extension SignalChannel {
 
 /// Live curve of the analysis regions: raw value of the signal channel or mean ΔS/S %.
 /// Blue band = baseline, light blue = where a baseline would be taken from here, red band = gas detected.
-/// Pinch with two fingers to zoom the time axis.
+/// Pinch with two fingers to zoom the time axis. Drag the ≡ handle to move the panel up or down.
 struct ChartPanel: View {
     @EnvironmentObject var pipeline: FramePipeline
+    /// Highest place the panel may be moved to (top of the preview, in the "stage" coordinate space).
+    var minTop: CGFloat = 0
+    /// Top of the panel at its normal place (offset 0), in the "stage" coordinate space.
+    @State private var baseTop: CGFloat = 0
+    @State private var moveStart: CGFloat?
+    @State private var liveOffset: CGFloat?
     /// 0 = everything (whole video / whole live buffer).
     private static let windows: [Double] = [1, 2, 5, 10, 30, 60, 120, 0]
     static let minWindow: Double = 0.5
@@ -62,13 +68,16 @@ struct ChartPanel: View {
         let full: Double = file ? pipeline.playbackDuration
                                 : max(0, (samples.last?.t ?? 0) - (samples.first?.t ?? 0))
         let ch = pipeline.params.channel
+        let off = clampedOffset(liveOffset ?? CGFloat(opt.chartOffsetY))
+        ZStack {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
+                moveHandle(current: off)
                 Picker("", selection: $pipeline.display.chartMode) {
                     ForEach(ChartMode.allCases) { m in Text(m.label(ch)).tag(m) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 168)
+                .frame(width: 150)
                 if opt.chartMode == .raw && nReg <= 1 {
                     Button { pipeline.display.chartShowGB.toggle() } label: {
                         Text("RGB").font(Theme.mono(11, .bold))
@@ -110,6 +119,46 @@ struct ChartPanel: View {
         .background(Theme.bar)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 6)
+        .offset(y: off)
+        }
+        .background(GeometryReader { g in
+            let top = g.frame(in: .named("stage")).minY
+            Color.clear
+                .onAppear { baseTop = top }
+                .onChange(of: top) { _, v in baseTop = v }
+        })
+    }
+
+    /// The panel may go up to `minTop` and never below its normal place.
+    private func clampedOffset(_ v: CGFloat) -> CGFloat {
+        let lowest = baseTop > minTop + 1 ? minTop - baseTop : 0
+        return max(lowest, min(0, v.isFinite ? v : 0))
+    }
+
+    /// ≡ handle: drag to move the panel, double-tap to put it back.
+    private func moveHandle(current: CGFloat) -> some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(liveOffset != nil ? Theme.accent : Color.gray)
+            .frame(width: 26, height: 26)
+            .background(Color.white.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                withAnimation(.easeOut(duration: 0.2)) { pipeline.display.chartOffsetY = 0 }
+            }
+            .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .named("stage"))
+                .onChanged { v in
+                    if moveStart == nil { moveStart = current }
+                    liveOffset = clampedOffset((moveStart ?? 0) + v.translation.height)
+                }
+                .onEnded { v in
+                    let final = clampedOffset((moveStart ?? current) + v.translation.height)
+                    pipeline.display.chartOffsetY = Double(final)
+                    liveOffset = nil
+                    moveStart = nil
+                })
+            .accessibilityLabel(L("移动曲线"))
     }
 
     private func scrub(_ t: Double, _ phase: LiveChart.ScrubPhase, _ span: ClosedRange<Double>?) {
