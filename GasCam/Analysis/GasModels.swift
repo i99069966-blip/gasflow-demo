@@ -472,6 +472,9 @@ struct ChartSample: Equatable {
     var ref: RGBMean? = nil
     /// Change (%) of the reference box since the baseline.
     var refResponse: Float? = nil
+    /// `response` / `regionResponse` / `refResponse` are relative to a baseline. Live: only after the
+    /// baseline. Video: the whole file once a baseline exists (also before it, drawn fainter).
+    var hasResponse = false
 }
 
 enum ChartMode: String, CaseIterable, Identifiable, Codable {

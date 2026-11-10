@@ -12,6 +12,8 @@ extension SignalChannel {
         case .redBlueRatio: return Color(red: 0.85, green: 0.5, blue: 1)
         }
     }
+    /// Same 0–255 scale as R, G and B (can share the RGB curve view). r and R/B are ratios.
+    var rgbScale: Bool { self == .red || self == .green || self == .blue || self == .luma }
 }
 
 /// Live curve of the analysis regions: raw value of the signal channel or mean ΔS/S %.
@@ -69,6 +71,15 @@ struct ChartPanel: View {
                                 : max(0, (samples.last?.t ?? 0) - (samples.first?.t ?? 0))
         let ch = pipeline.params.channel
         let off = clampedOffset(liveOffset ?? CGFloat(opt.chartOffsetY))
+        let showRGB = opt.chartShowGB && ch.rgbScale
+        // why the Δ curve is empty (shown inside the chart)
+        let hint: String? = {
+            switch pipeline.result.phase {
+            case .waiting: return file ? L("还没有基线：拖到通气前的位置，按 BASELINE") : L("还没有基线：按 BASELINE")
+            case .baseline: return L("正在取基线…")
+            default: return file && pipeline.scanProgress < 1 ? L("正在扫描曲线…") : nil
+            }
+        }()
         ZStack {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
@@ -78,7 +89,7 @@ struct ChartPanel: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 150)
-                if opt.chartMode == .raw && nReg <= 1 {
+                if opt.chartMode == .raw && nReg <= 1 && ch.rgbScale {
                     Button { pipeline.display.chartShowGB.toggle() } label: {
                         Text("RGB").font(Theme.mono(11, .bold))
                             .foregroundStyle(opt.chartShowGB ? .black : .white)
@@ -109,8 +120,8 @@ struct ChartPanel: View {
                 }
             }
             if nReg > 1 { legend(nReg) }
-            LiveChart(samples: samples, mode: opt.chartMode, window: window, showGB: opt.chartShowGB,
-                      channel: ch, playhead: playhead, span: span, preview: preview,
+            LiveChart(samples: samples, mode: opt.chartMode, window: window, showGB: showRGB,
+                      channel: ch, playhead: playhead, span: span, preview: preview, emptyHint: hint,
                       onScrub: scrubHandler,
                       onZoom: { scale, ended in zoom(scale, ended, file: file, full: full, current: window) })
                 .frame(height: 86)
@@ -256,7 +267,7 @@ struct ChartPanel: View {
                     Text(String(format: "%@ %.2f", ch.shortName, ch.value(r: cur.r, g: cur.g, b: cur.b)))
                         .foregroundStyle(ch.color)
                 } else {
-                    Text(String(format: "%+.2f%%", cur.response)).foregroundStyle(Theme.accent)
+                    Text(cur.hasResponse ? String(format: "%+.2f%%", cur.response) : "—").foregroundStyle(Theme.accent)
                 }
                 if playhead == nil {
                     Text(String(format: L("亮度波动 %.2f%%"), Self.ripple(s))).foregroundStyle(.gray)
@@ -296,6 +307,8 @@ struct LiveChart: View {
     var span: ClosedRange<Double>? = nil
     /// Light-blue band: where a baseline taken from the playhead would come from.
     var preview: ClosedRange<Double>? = nil
+    /// Shown in the middle when the Δ curve has nothing to draw (no baseline yet …).
+    var emptyHint: String? = nil
     /// Video mode: dragging on the chart moves the playhead.
     var onScrub: ((Double, ScrubPhase) -> Void)? = nil
     /// Two-finger pinch: (magnification, ended).
@@ -375,7 +388,7 @@ struct LiveChart: View {
                     let v = channel.value(r: p.r, g: p.g, b: p.b)
                     lo = min(lo, v); hi = max(hi, v)
                 }
-            } else if p.phase >= 2 {
+            } else if p.hasResponse {
                 if multi {
                     for v in p.regionResponse { lo = min(lo, v); hi = max(hi, v) }
                 } else {
@@ -385,7 +398,7 @@ struct LiveChart: View {
         }
         let showRef = mode == .response && vis.contains { $0.refResponse != nil }
         if showRef {
-            for p in vis where p.phase >= 2 {
+            for p in vis where p.hasResponse {
                 if let v = p.refResponse { lo = min(lo, v); hi = max(hi, v) }
             }
         }
@@ -457,10 +470,16 @@ struct LiveChart: View {
         }
         if multi {
             for k in 0..<nReg {
-                let path: Path = mode == .raw
-                    ? curve({ k < $0.regions.count ? rawValue($0.regions[k]) : nil })
-                    : curve({ $0.phase >= 2 && k < $0.regionResponse.count ? $0.regionResponse[k] : nil })
-                ctx.stroke(path, with: .color(AnalysisRegions.swiftColor(k)), lineWidth: 1.4)
+                let color = AnalysisRegions.swiftColor(k)
+                if mode == .raw {
+                    ctx.stroke(curve({ k < $0.regions.count ? rawValue($0.regions[k]) : nil }), with: .color(color), lineWidth: 1.4)
+                } else {
+                    // fainter before / during the baseline (video), full after it
+                    ctx.stroke(curve({ $0.hasResponse && k < $0.regionResponse.count ? $0.regionResponse[k] : nil }),
+                               with: .color(color.opacity(0.4)), lineWidth: 1)
+                    ctx.stroke(curve({ $0.hasResponse && $0.phase >= 2 && k < $0.regionResponse.count ? $0.regionResponse[k] : nil }),
+                               with: .color(color), lineWidth: 1.4)
+                }
             }
         } else if mode == .raw {
             if showGB {
@@ -468,15 +487,25 @@ struct LiveChart: View {
                 ctx.stroke(curve({ $0.b }), with: .color(SignalChannel.blue.color), lineWidth: channel == .blue ? 1.8 : 1)
                 ctx.stroke(curve({ $0.g }), with: .color(SignalChannel.green.color), lineWidth: channel == .green ? 1.8 : 1)
                 ctx.stroke(curve({ $0.r }), with: .color(SignalChannel.red.color), lineWidth: channel == .red ? 1.8 : 1)
+                if channel == .luma {
+                    ctx.stroke(curve({ SignalChannel.luma.value(r: $0.r, g: $0.g, b: $0.b) }),
+                               with: .color(SignalChannel.luma.color), lineWidth: 1.8)
+                }
             } else {
                 ctx.stroke(curve({ channel.value(r: $0.r, g: $0.g, b: $0.b) }), with: .color(channel.color), lineWidth: 1.6)
             }
         } else {
-            ctx.stroke(curve({ $0.phase >= 2 ? $0.response : nil }), with: .color(Theme.accent), lineWidth: 1.6)
+            // fainter before / during the baseline (video), full after it
+            ctx.stroke(curve({ $0.hasResponse ? $0.response : nil }), with: .color(Theme.accent.opacity(0.4)), lineWidth: 1.2)
+            ctx.stroke(curve({ $0.hasResponse && $0.phase >= 2 ? $0.response : nil }), with: .color(Theme.accent), lineWidth: 1.6)
+        }
+        if mode == .response, let hint = emptyHint, !vis.contains(where: { $0.hasResponse }) {
+            ctx.draw(Text(hint).font(Theme.mono(10, .semibold)).foregroundColor(Theme.accent),
+                     at: CGPoint(x: leftPad + plotW / 2, y: size.height / 2))
         }
         // reference box (white dashed): what the light / exposure alone did
         if showRef {
-            ctx.stroke(curve({ $0.phase >= 2 ? $0.refResponse : nil }), with: .color(.white.opacity(0.85)),
+            ctx.stroke(curve({ $0.hasResponse ? $0.refResponse : nil }), with: .color(.white.opacity(0.85)),
                        style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
             ctx.draw(Text("REF").font(Theme.mono(8, .bold)).foregroundColor(.white),
                      at: CGPoint(x: size.width - 2, y: 6), anchor: .trailing)

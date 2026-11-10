@@ -395,5 +395,9 @@ enum Strings {
         "固定阈值": ("固定閾値", "Fixed threshold"),
         "自适应": ("適応", "Adaptive"),
         "移动曲线": ("グラフを移動", "Move chart"),
+        "还没有基线：拖到通气前的位置，按 BASELINE": ("ベースラインがありません：ガスを流す前の位置に移動して BASELINE", "No baseline yet: move to before the gas and press BASELINE"),
+        "还没有基线：按 BASELINE": ("ベースラインがありません：BASELINE を押してください", "No baseline yet: press BASELINE"),
+        "正在取基线…": ("ベースライン取得中…", "Taking the baseline…"),
+        "正在扫描曲线…": ("グラフをスキャン中…", "Scanning the curve…"),
     ]
 }

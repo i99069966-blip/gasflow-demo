@@ -689,10 +689,11 @@ final class FramePipeline: ObservableObject {
                     o.phase = 1
                 }
             }
-            if refBox > 1 && o.phase >= 2, let rf = s.ref {
+            if refBox > 1, let rf = s.ref {
                 o.refResponse = pol(100 * (ch.value(r: rf.r, g: rf.g, b: rf.b) - refBox) / refBox)
             }
-            if ref > 0 && o.phase >= 2 {
+            if ref > 0 {
+                o.hasResponse = true
                 let f = factor(s)
                 o.response = pol(100 * (ch.value(r: s.r, g: s.g, b: s.b) * f - ref) / ref)
                 o.regionResponse = (0..<min(nReg, s.regions.count)).map { k in
@@ -1009,7 +1010,7 @@ final class FramePipeline: ObservableObject {
             }
             chartBuf.append(ChartSample(t: tc, r: mr, g: mg, b: mb, response: r.meanResponse, phase: code,
                                         regions: means.regions, regionResponse: r.regions.map { $0.meanResponse },
-                                        ref: means.reference, refResponse: r.refResponse))
+                                        ref: means.reference, refResponse: r.refResponse, hasResponse: code >= 2))
             lastChartT = tc
             if let cut = chartBuf.firstIndex(where: { tc - $0.t <= 125 }), cut > 0 {
                 chartBuf.removeFirst(cut)
