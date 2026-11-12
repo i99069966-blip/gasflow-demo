@@ -49,6 +49,10 @@ final class FramePipeline: ObservableObject {
     }
     @Published var playbackSpeed: Double = 1 { didSet { fileSource.speed = playbackSpeed } }
     @Published var toast: String?
+    /// Video export: progress 0…1 while running (nil = not running) and the outcome of the last one.
+    @Published private(set) var exportProgress: Double?
+    @Published var exportOutcome: ExportOutcome?
+    private var exporter: VideoExporter?
     /// Frame rate of the opened video file (0 = none).
     @Published private(set) var videoFrameRate: Double = 0
 
@@ -448,6 +452,9 @@ final class FramePipeline: ObservableObject {
                         }
                         self.toast = text
                         if toPhotos { self.saveVideoToPhotos(url) }
+                        if CloudSync.isConfigured && CloudSync.afterRecording {
+                            CloudSync.copy(CloudSync.recordingFiles(url)) { msg in self.toast = msg }
+                        }
                     } else {
                         self.toast = L("录制失败") + ": \(err ?? L("未知错误"))"
                     }
@@ -807,6 +814,50 @@ final class FramePipeline: ObservableObject {
         camera.start()
     }
 
+    // MARK: - Export (video analysis)
+
+    /// Video time where the baseline was taken (export needs one).
+    var exportBaselineStart: Double? { marks.baselineStart }
+
+    /// Analyse the open video again from start to end with the current settings and baseline, and
+    /// write the chosen files (analysis video, region CSV, arrival map, result image).
+    func startExport(_ options: ExportOptions) {
+        guard case .file = source, let url = currentFileURL, exporter == nil, !options.isEmpty else { return }
+        guard let b0 = marks.baselineStart else {
+            toast = L("请先取基线：拖到通气前的位置，按 BASELINE")
+            return
+        }
+        playbackPaused = true
+        procLock.lock()
+        let target = procBaselineTarget
+        let vs = procVideoScale
+        procLock.unlock()
+        let req = ExportRequest(source: url, name: url.deletingPathExtension().lastPathComponent,
+                                params: params, regions: regions, display: display,
+                                baselineStart: b0, baselineFrames: target, videoScale: vs, options: options)
+        let ex = VideoExporter()
+        exporter = ex
+        exportOutcome = nil
+        exportProgress = 0
+        UIApplication.shared.isIdleTimerDisabled = true
+        ex.run(req, progress: { [weak self] p in
+            guard let self, self.exporter === ex else { return }
+            self.exportProgress = p
+        }, completion: { [weak self] files, folder, error in
+            guard let self else { return }
+            self.exporter = nil
+            self.exportProgress = nil
+            UIApplication.shared.isIdleTimerDisabled = false
+            self.exportOutcome = ExportOutcome(files: files, folder: folder, error: error)
+            if error == nil, let folder, CloudSync.isConfigured, CloudSync.afterExport {
+                self.exportOutcome?.cloud = L("正在复制到同步文件夹…")
+                CloudSync.copy([folder]) { msg in self.exportOutcome?.cloud = msg }
+            }
+        })
+    }
+
+    func cancelExport() { exporter?.cancel() }
+
     // MARK: - Result image
 
     /// Saves the current frame + overlay + arrow as PNG to Documents (and Photos).
@@ -1076,9 +1127,11 @@ final class FramePipeline: ObservableObject {
     }
 }
 
-/// Draws ROI, arrow and markers into a bitmap (used for the saved result image).
+/// Draws ROI, arrow and markers into a bitmap (used for the saved result image and the exported video).
+/// The context must use UIKit coordinates (origin top-left).
 enum ResultDrawing {
-    static func draw(in ctx: CGContext, size: CGSize, regions: AnalysisRegions, result r: GasFrameResult) {
+    static func draw(in ctx: CGContext, size: CGSize, regions: AnalysisRegions, result r: GasFrameResult,
+                     summary: Bool = true) {
         func pt(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x * size.width, y: p.y * size.height) }
         func box(_ q: NormRect) -> CGRect {
             CGRect(x: q.x0 * size.width, y: q.y0 * size.height, width: q.width * size.width, height: q.height * size.height)
@@ -1104,7 +1157,7 @@ enum ResultDrawing {
                                      withAttributes: [.font: font, .foregroundColor: UIColor.white])
         }
         UIGraphicsPopContext()
-        drawSummary(in: ctx, size: size, regions: regions, result: r)
+        if summary { drawSummary(in: ctx, size: size, regions: regions, result: r) }
         guard let s = r.source ?? r.lastSource else { return }
         let e = pt(s.earliest), c = pt(s.centroid), src = pt(s.sourcePoint)
         if s.mode == .direction {
@@ -1132,6 +1185,27 @@ enum ResultDrawing {
         ctx.move(to: CGPoint(x: src.x - rr, y: src.y - rr)); ctx.addLine(to: CGPoint(x: src.x + rr, y: src.y + rr))
         ctx.move(to: CGPoint(x: src.x + rr, y: src.y - rr)); ctx.addLine(to: CGPoint(x: src.x - rr, y: src.y + rr))
         ctx.strokePath()
+    }
+
+    /// Small text block at the top left (exported video frames).
+    static func drawStamp(in ctx: CGContext, size: CGSize, lines: [String]) {
+        guard !lines.isEmpty else { return }
+        let fontSize = max(12, size.width / 52)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .semibold),
+            .foregroundColor: UIColor.white,
+        ]
+        let text = lines.joined(separator: "\n") as NSString
+        let maxW = size.width - 24
+        let box = text.boundingRect(with: CGSize(width: maxW, height: size.height), options: [.usesLineFragmentOrigin],
+                                    attributes: attrs, context: nil)
+        let origin = CGPoint(x: 12, y: 12)
+        UIGraphicsPushContext(ctx)
+        ctx.setFillColor(UIColor.black.withAlphaComponent(0.55).cgColor)
+        ctx.fill(CGRect(x: origin.x - 6, y: origin.y - 6, width: min(maxW, box.width) + 12, height: box.height + 12))
+        text.draw(with: CGRect(origin: origin, size: CGSize(width: maxW, height: box.height + 2)),
+                  options: [.usesLineFragmentOrigin], attributes: attrs, context: nil)
+        UIGraphicsPopContext()
     }
 
     /// Text block at the bottom: first arrival, arrow, region order.

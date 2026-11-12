@@ -118,6 +118,11 @@ final class CameraController: NSObject, ObservableObject {
     }()
 
     @Published var statusMessage: String?
+    /// Exposure time the sensor really uses (read back; it is rounded to the sensor line time and can
+    /// differ slightly from the value that was set). 0 = unknown.
+    @Published var actualShutter: Double = 0
+    /// The device takes custom exposure values (always true on the back cameras). sessionQueue.
+    private var customExposure = true
 
     /// Torch brightness follows the scene until the camera is locked (BASELINE / LOCK).
     @Published var torchAuto = false
@@ -474,7 +479,8 @@ final class CameraController: NSObject, ObservableObject {
             try dev.lockForConfiguration()
             // AUTO is driven by GasCam itself (autoExposureStep) so that it meters the analysis
             // regions and can keep the shutter fixed; the device always runs in custom mode.
-            if !dev.isExposureModeSupported(.custom) {
+            customExposure = dev.isExposureModeSupported(.custom)
+            if !customExposure {
                 if dev.isExposureModeSupported(.continuousAutoExposure) { dev.exposureMode = .continuousAutoExposure }
             } else {
                 let fmt = dev.activeFormat
@@ -600,7 +606,8 @@ final class CameraController: NSObject, ObservableObject {
         shutterAuto = auto
         lockSummary = nil
         sessionQueue.async {
-            if let dev = self.device, dev.exposureDuration.seconds > 0 {
+            // in custom mode the set values are the truth; the read-back is rounded by the sensor
+            if !self.customExposure, let dev = self.device, dev.exposureDuration.seconds > 0 {
                 self.desired.iso = dev.iso
                 self.desired.shutter = dev.exposureDuration.seconds
             }
@@ -619,7 +626,9 @@ final class CameraController: NSObject, ObservableObject {
         exposureAuto = false
         shutterAuto = false
         sessionQueue.async {
-            if let dev = self.device, dev.exposureDuration.seconds > 0 { self.desired.shutter = dev.exposureDuration.seconds }
+            if !self.customExposure, let dev = self.device, dev.exposureDuration.seconds > 0 {
+                self.desired.shutter = dev.exposureDuration.seconds
+            }
             self.desired.exposureAuto = false
             self.desired.shutterAuto = false
             self.desired.iso = value
@@ -635,7 +644,7 @@ final class CameraController: NSObject, ObservableObject {
         shutter = seconds
         shutterAuto = false
         sessionQueue.async {
-            if let dev = self.device { self.desired.iso = dev.iso }
+            if !self.customExposure, let dev = self.device { self.desired.iso = dev.iso }
             self.desired.shutterAuto = false
             self.desired.shutter = seconds
             self.applyExposure()
@@ -772,25 +781,14 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
 
-    func setTorchAuto(_ on: Bool) {
-        let enable = on && hasTorch
-        torchAuto = enable
-        sessionQueue.async {
-            self.desired.torchAuto = enable
-            self.autoLoopActive = enable || self.desired.exposureAuto
-            if enable { self.restartAuto() }
-        }
-        onSettingsChanged?()
-    }
-
-    /// One tap: exposure, white balance, focus and torch back to automatic (zoom is left alone).
+    /// One tap: exposure, white balance and focus back to automatic. The torch is never automatic:
+    /// it stays at the level set by hand (zoom is left alone too).
     func setAllAuto() {
         exposureAuto = true
         shutterAuto = true
         wbAuto = true
         focusAuto = true
-        let torch = hasTorch
-        torchAuto = torch
+        torchAuto = false
         lockSummary = nil
         sessionQueue.async {
             self.desired.exposureAuto = true
@@ -798,7 +796,7 @@ final class CameraController: NSObject, ObservableObject {
             self.autoLoopActive = true
             self.desired.wbAuto = true
             self.desired.focusAuto = true
-            self.desired.torchAuto = torch
+            self.desired.torchAuto = false
             self.applyWhiteBalance()
             self.applyFocus()
             self.restartAuto()
@@ -937,7 +935,7 @@ final class CameraController: NSObject, ObservableObject {
                 r *= iso / ni
                 iso = ni
             }
-            if r > 1.15 { warn = L("光线不足：闪光灯和 ISO 已到上限") }
+            if r > 1.15 { warn = s.torchAuto ? L("光线不足：闪光灯和 ISO 已到上限") : L("光线不足：ISO 已到上限，请调亮闪光灯") }
         } else {
             // 1. ISO down to its minimum
             if s.exposureAuto && iso > minISO * 1.001 {
@@ -1069,10 +1067,11 @@ final class CameraController: NSObject, ObservableObject {
                 return
             }
             let fmt = dev.activeFormat
-            var dur = dev.exposureDuration.seconds
+            // custom mode: lock the values that were set (the read-back is rounded by the sensor)
+            var dur = self.customExposure ? self.desired.shutter : dev.exposureDuration.seconds
             if !(dur > 0) { dur = self.desired.shutter }
             dur = min(max(dur, fmt.minExposureDuration.seconds), fmt.maxExposureDuration.seconds)
-            let iso = min(max(dev.iso, fmt.minISO), fmt.maxISO)
+            let iso = min(max(self.customExposure ? self.desired.iso : dev.iso, fmt.minISO), fmt.maxISO)
             self.desired.iso = iso
             self.desired.shutter = dur
             self.desired.exposureAuto = false
@@ -1129,12 +1128,15 @@ final class CameraController: NSObject, ObservableObject {
         sessionQueue.async {
             guard let dev = self.device else { return }
             let s = self.desired
+            let custom = self.customExposure
             let iso = dev.iso
             let dur = dev.exposureDuration.seconds
             let lens = dev.lensPosition
             let tt = dev.temperatureAndTintValues(for: dev.deviceWhiteBalanceGains)
             DispatchQueue.main.async {
-                if s.exposureAuto {
+                if dur.isFinite && dur > 0 && abs(dur - self.actualShutter) > 1e-7 { self.actualShutter = dur }
+                // GasCam's own AUTO publishes its values; read back only when the device runs its own auto
+                if s.exposureAuto && !custom {
                     if iso.isFinite { self.iso = iso }
                     if dur.isFinite && dur > 0 { self.shutter = dur }
                 }

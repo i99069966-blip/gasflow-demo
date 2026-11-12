@@ -17,8 +17,10 @@
 		0285EEDAC29A3072ADC87B8D /* CrashReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68FECD15DB2763B5B01C525 /* CrashReporter.swift */; };
 		FBAC22C94F97636269C68529 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14B5EEFF74B58687C026C37C /* Localization.swift */; };
 		546152095525B8FCE608D693 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98A0884D211F83B226E20756 /* Strings.swift */; };
+		6C9A0C72542981179A6B3E33 /* CloudSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = E490649C8AFADC37CAA58ACA /* CloudSync.swift */; };
 		3C8B40F6BD1245264670A64D /* FramePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B78324BC45E88E6CEC6A2B /* FramePipeline.swift */; };
 		4E7DF43B6D2A8BFCBE2B60E3 /* RecordingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33CFDE59C3591B408BAF09 /* RecordingStore.swift */; };
+		E7FCD314C8068DE25AB01A9D /* VideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A18383E1B9AA0A3BE8788A /* VideoExporter.swift */; };
 		10DF852216FF3391C2CD3347 /* VideoFileSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C35D03E154032095FB286D /* VideoFileSource.swift */; };
 		3CFB95721376FD09DDCF3F0D /* MetalPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B51C3F4E1AECDDE0C9094DC /* MetalPreviewView.swift */; };
 		2B8D722BA3DE8FEA9D742C7C /* PreviewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835D0C4C7C5E2B3A1F39E09C /* PreviewRenderer.swift */; };
@@ -27,6 +29,7 @@
 		091D0686EBE6823F484BFAC7 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF752E97FA5573A8F648B8C /* Components.swift */; };
 		2E958D70619E0EC1FAAA3083 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1627B0F655F3D44658867B0E /* ContentView.swift */; };
 		0D782B8FCBBEAF368C0EA640 /* ControlPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */; };
+		049EBB430D5DCCF8A1D7D89B /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48EBFE87C23CF509183E7BF8 /* ExportView.swift */; };
 		B68725786EBCF71D5F162669 /* Help.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5FF579FA7624A1BF62C7549 /* Help.swift */; };
 		5DE3108726ADEDE6677B92BE /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB45C5FEE899B997B0EF65C /* HistogramView.swift */; };
 		F2A4F6DBCCE8DEF9268C5E84 /* PreviewArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */; };
@@ -45,6 +48,7 @@
 		1627B0F655F3D44658867B0E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2D1B4A7191B74A6ED7C450F9 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		359AFBA3C7547820E027888F /* TopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopBar.swift; sourceTree = "<group>"; };
+		48EBFE87C23CF509183E7BF8 /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
 		4EE652E981A46F2F29C12B4D /* Colormap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colormap.swift; sourceTree = "<group>"; };
 		4FF752E97FA5573A8F648B8C /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		62D26DC40051CAF58627FD9D /* CameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraController.swift; sourceTree = "<group>"; };
@@ -66,7 +70,9 @@
 		DBD196AC409C640F44479847 /* CameraSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSettings.swift; sourceTree = "<group>"; };
 		DD33CFDE59C3591B408BAF09 /* RecordingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingStore.swift; sourceTree = "<group>"; };
 		DE83B17165685B997360D815 /* GasCam-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GasCam-Info.plist"; sourceTree = "<group>"; };
+		E490649C8AFADC37CAA58ACA /* CloudSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSync.swift; sourceTree = "<group>"; };
 		E868C93E9A48E295E66F06BC /* RegionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionEditor.swift; sourceTree = "<group>"; };
+		F0A18383E1B9AA0A3BE8788A /* VideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporter.swift; sourceTree = "<group>"; };
 		F0B78324BC45E88E6CEC6A2B /* FramePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FramePipeline.swift; sourceTree = "<group>"; };
 		FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlPanel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -121,8 +127,10 @@
 		2C25B656F0419F9DB4765C99 /* Pipeline */ = {
 			isa = PBXGroup;
 			children = (
+				E490649C8AFADC37CAA58ACA /* CloudSync.swift */,
 				F0B78324BC45E88E6CEC6A2B /* FramePipeline.swift */,
 				DD33CFDE59C3591B408BAF09 /* RecordingStore.swift */,
+				F0A18383E1B9AA0A3BE8788A /* VideoExporter.swift */,
 			);
 			path = Pipeline;
 			sourceTree = "<group>";
@@ -172,6 +180,7 @@
 				4FF752E97FA5573A8F648B8C /* Components.swift */,
 				1627B0F655F3D44658867B0E /* ContentView.swift */,
 				FC56D2A3498CC68DEB308C3D /* ControlPanel.swift */,
+				48EBFE87C23CF509183E7BF8 /* ExportView.swift */,
 				B5FF579FA7624A1BF62C7549 /* Help.swift */,
 				BDB45C5FEE899B997B0EF65C /* HistogramView.swift */,
 				A2508510BBA4CFA5FD9833F3 /* PreviewArea.swift */,
@@ -278,8 +287,10 @@
 				0285EEDAC29A3072ADC87B8D /* CrashReporter.swift in Sources */,
 				FBAC22C94F97636269C68529 /* Localization.swift in Sources */,
 				546152095525B8FCE608D693 /* Strings.swift in Sources */,
+				6C9A0C72542981179A6B3E33 /* CloudSync.swift in Sources */,
 				3C8B40F6BD1245264670A64D /* FramePipeline.swift in Sources */,
 				4E7DF43B6D2A8BFCBE2B60E3 /* RecordingStore.swift in Sources */,
+				E7FCD314C8068DE25AB01A9D /* VideoExporter.swift in Sources */,
 				10DF852216FF3391C2CD3347 /* VideoFileSource.swift in Sources */,
 				3CFB95721376FD09DDCF3F0D /* MetalPreviewView.swift in Sources */,
 				2B8D722BA3DE8FEA9D742C7C /* PreviewRenderer.swift in Sources */,
@@ -288,6 +299,7 @@
 				091D0686EBE6823F484BFAC7 /* Components.swift in Sources */,
 				2E958D70619E0EC1FAAA3083 /* ContentView.swift in Sources */,
 				0D782B8FCBBEAF368C0EA640 /* ControlPanel.swift in Sources */,
+				049EBB430D5DCCF8A1D7D89B /* ExportView.swift in Sources */,
 				B68725786EBCF71D5F162669 /* Help.swift in Sources */,
 				5DE3108726ADEDE6677B92BE /* HistogramView.swift in Sources */,
 				F2A4F6DBCCE8DEF9268C5E84 /* PreviewArea.swift in Sources */,
@@ -377,7 +389,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -397,7 +409,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7.1;
+				MARKETING_VERSION = 1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "jp.lab.lspr.GasCam";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -414,7 +426,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -434,7 +446,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7.1;
+				MARKETING_VERSION = 1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "jp.lab.lspr.GasCam";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

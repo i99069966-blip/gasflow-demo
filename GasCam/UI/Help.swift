@@ -3,7 +3,7 @@ import SwiftUI
 /// Short explanation of a setting: what it does, what a larger value does, and what to use.
 enum HelpTopic: String, CaseIterable {
     case ev, iso, shutter, wb, focus, torch, fps, resolution, bitrate, codec, mains
-    case autoISOCap, autoTorchLimit
+    case autoISOCap
     case channel, polarity, threshold, kSigma, confirmFrames, minArrived, blur, ema, analysisRate
     case directionConf, autoRearm, baselineTracking, baselineSeconds, arrivalSpan, regionArrival
     case useReference, autoScale, displayMax, flowLag, flowScale, overlayOpacity, blackBackground
@@ -24,7 +24,6 @@ enum HelpTopic: String, CaseIterable {
         case .codec: return L("编码")
         case .mains: return L("电网频率（灯光频闪）")
         case .autoISOCap: return L("AUTO 最高 ISO")
-        case .autoTorchLimit: return L("AUTO 闪光灯上限")
         case .channel: return L("信号通道")
         case .polarity: return L("响应方向")
         case .threshold: return L("检测阈值")
@@ -74,7 +73,7 @@ enum HelpTopic: String, CaseIterable {
                              L("点基板自动对焦，按 LOCK 固定。看不清时手动对焦并打开 PEAK。"))
         case .torch: return (L("照亮基板的光源。用电池供电，本身不闪。"),
                              L("越亮噪声越小，但手机会发热。"),
-                             L("交给 AUTO。长时间实验手机发热时，系统可能自动调暗闪光灯，基线会漂移。"))
+                             L("手动设一个够亮的值，整个实验保持不变（AUTO 不会动它）。长时间实验手机发热时，系统可能自动调暗闪光灯，基线会漂移。"))
         case .fps: return (L("每秒拍多少帧。"),
                            L("越高时间越精细，但每帧的光更少、文件更大。"),
                            L("一般 30–60 fps；气体来得很快时 120 fps。"))
@@ -93,9 +92,6 @@ enum HelpTopic: String, CaseIterable {
         case .autoISOCap: return (L("AUTO 最多把 ISO 升到这里。手动不受限制。"),
                                   L("高：暗处也能调亮，但噪声大；低：噪声小，但更容易“光线不足”。"),
                                   L("800；闪光灯够亮时可以设 400。"))
-        case .autoTorchLimit: return (L("AUTO 最多把闪光灯开到这里。"),
-                                      L("高：更亮、噪声更小，但手机更热。"),
-                                      L("100%；长时间实验手机发热时 60–80%。"))
         case .channel: return (L("用哪个颜色的变化来检测气体。"),
                                L("—"),
                                L("选变化最大、噪声最小的通道。视频分析后 App 会推荐。你的基板是 R；灯光不稳又没有参考框时用 R/B（色比，不受亮度变化影响）。"))
@@ -281,7 +277,7 @@ struct StepGuide: View {
         let locked = camera.isFullyLocked
         let steps: [(String, Bool)] = [
             (L("画框"), !pipeline.regions.isEmpty),
-            ("AUTO", camera.exposureAuto || camera.torchAuto || locked),
+            ("AUTO", camera.exposureAuto || locked),
             ("LOCK", locked),
             ("BASELINE", baselineDone),
             (L("通气"), r.phase == .detected),

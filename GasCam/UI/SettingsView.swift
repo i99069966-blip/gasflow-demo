@@ -27,6 +27,13 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var pickerItem: PhotosPickerItem?
     @State private var showImporter = false
+    /// The one file importer of this view picks either a movie or the cloud sync folder
+    /// (two `.fileImporter`s in one hierarchy don't work reliably).
+    @State private var importingFolder = false
+    @State private var cloudFolder: String? = CloudSync.folderName
+    @State private var cloudAfterRecording = CloudSync.afterRecording
+    @State private var cloudAfterExport = CloudSync.afterExport
+    @State private var cloudMessage: String?
     @State private var loadingVideo = false
     @State private var recordingCount = 0
     @State private var crashLogs: [URL] = []
@@ -37,6 +44,7 @@ struct SettingsView: View {
                 languageSection
                 videoSection
                 recordingSection
+                cloudSection
                 cameraSection
                 assistSection
                 detectionSection
@@ -50,8 +58,8 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) { Button(L("完成")) { dismiss() } }
             }
             .fileImporter(isPresented: $showImporter,
-                          allowedContentTypes: [.movie, .quickTimeMovie, .mpeg4Movie]) { result in
-                handleImport(result)
+                          allowedContentTypes: importingFolder ? [.folder] : [.movie, .quickTimeMovie, .mpeg4Movie]) { result in
+                if importingFolder { handleFolder(result) } else { handleImport(result) }
             }
             .onChange(of: pickerItem) { _, item in
                 guard let item else { return }
@@ -109,7 +117,7 @@ struct SettingsView: View {
             PhotosPicker(selection: $pickerItem, matching: .videos) {
                 Label(loadingVideo ? L("正在载入…") : L("从相册导入视频分析"), systemImage: "photo.on.rectangle")
             }
-            Button { showImporter = true } label: {
+            Button { importingFolder = false; showImporter = true } label: {
                 Label(L("从“文件”导入视频分析"), systemImage: "folder")
             }
             Picker(L("回放速度"), selection: $pipeline.playbackSpeed) {
@@ -125,6 +133,51 @@ struct SettingsView: View {
         } footer: {
             Text(String(format: L("导入的视频走与实时相机完全相同的检测流程：默认用开头 %.1f 秒作基线；也可以拖动进度条或曲线到任意位置后点 BASELINE，从那里重新取基线。"),
                         pipeline.params.baselineSeconds))
+        }
+    }
+
+    private var cloudSection: some View {
+        Section {
+            HStack {
+                Text(L("同步文件夹"))
+                Spacer()
+                Text(cloudFolder ?? L("未设置")).foregroundStyle(.gray).lineLimit(1)
+            }
+            Button(cloudFolder == nil ? L("选择文件夹…") : L("更换文件夹…")) {
+                importingFolder = true
+                showImporter = true
+            }
+            if cloudFolder != nil {
+                Toggle(L("录像完成后自动上传"), isOn: $cloudAfterRecording)
+                    .onChange(of: cloudAfterRecording) { _, v in CloudSync.afterRecording = v }
+                Toggle(L("导出完成后自动上传"), isOn: $cloudAfterExport)
+                    .onChange(of: cloudAfterExport) { _, v in CloudSync.afterExport = v }
+                Button(L("停止同步"), role: .destructive) {
+                    CloudSync.clear()
+                    cloudFolder = nil
+                }
+            }
+            if let cloudMessage { Text(cloudMessage).font(.footnote).foregroundStyle(.orange) }
+        } header: {
+            Text(L("云端同步（Google Drive 等）"))
+        } footer: {
+            Text(L("先在手机上安装 Google Drive App 并登录，然后在这里点“选择文件夹”，在“浏览”里打开 Google Drive，选一个文件夹（看不到 Google Drive 时：“浏览”右上角 … → 编辑，把它打开）。录像和导出的文件会复制到那里，由 Google Drive App 负责上传；网络不好时可能要过一会儿，必要时打开一下 Google Drive App。"))
+        }
+    }
+
+    private func handleFolder(_ result: Result<URL, Error>) {
+        importingFolder = false
+        switch result {
+        case .success(let url):
+            do {
+                try CloudSync.setFolder(url)
+                cloudFolder = CloudSync.folderName
+                cloudMessage = nil
+            } catch {
+                cloudMessage = L("无法使用这个文件夹") + ": " + error.localizedDescription
+            }
+        case .failure(let e):
+            cloudMessage = e.localizedDescription
         }
     }
 
@@ -169,13 +222,10 @@ struct SettingsView: View {
             Picker(selection: $camera.autoISOCap) {
                 ForEach([Float(200), 400, 800, 1600, 3200], id: \.self) { v in Text("\(Int(v))").tag(v) }
             } label: { HelpLabel(L("AUTO 最高 ISO"), .autoISOCap) }
-            ValueSlider(label: L("AUTO 闪光灯上限"), value: $camera.autoTorchLimit, range: 0.1...1, help: .autoTorchLimit) {
-                "\(Int(($0 * 100).rounded()))%"
-            }
         } header: {
             Text(L("相机 AUTO / LOCK"))
         } footer: {
-            Text(L("AUTO：快门固定为不超过 1/帧率的最长防频闪值；框内最亮的 2% 像素调到约 85%（不过曝）。暗了先加闪光灯，开满还不够再升 ISO（不超过上面的上限）；亮了先降 ISO，再降闪光灯，最后才缩短快门。点画面只用于对焦。按 LOCK 全部固定并显示最终参数。最高 ISO 只限制 AUTO，手动仍可设到手机的最高值。"))
+            Text(L("AUTO：快门固定为不超过 1/帧率的最长防频闪值；框内最亮的 2% 像素调到约 85%（不过曝）。暗了升 ISO（不超过上面的上限）；亮了先降 ISO，最后才缩短快门。闪光灯不归 AUTO 管，保持你手动设的亮度。点画面只用于对焦。按 LOCK 全部固定并显示最终参数。最高 ISO 只限制 AUTO，手动仍可设到手机的最高值。"))
         }
     }
 
@@ -362,6 +412,16 @@ struct RecordingsView: View {
                             Label(L("删除"), systemImage: "trash")
                         }
                     }
+                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                        if CloudSync.isConfigured {
+                            Button {
+                                upload([item])
+                            } label: {
+                                Label(L("上传"), systemImage: "icloud.and.arrow.up")
+                            }
+                            .tint(.blue)
+                        }
+                    }
             }
         }
         .navigationTitle(L("本 App 的录像"))
@@ -375,7 +435,16 @@ struct RecordingsView: View {
                     }
                 }
             }
-            ToolbarItem(placement: .bottomBar) {
+            ToolbarItemGroup(placement: .bottomBar) {
+                if selecting && CloudSync.isConfigured {
+                    Button {
+                        upload(items.filter { selection.contains($0.url) })
+                    } label: {
+                        Text(String(format: L("上传（%d）"), selection.count))
+                    }
+                    .disabled(selection.isEmpty)
+                    Spacer()
+                }
                 if selecting {
                     Button(role: .destructive) {
                         askDelete(items.filter { selection.contains($0.url) })
@@ -409,6 +478,18 @@ struct RecordingsView: View {
         }
         .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) { message = nil }
+        }
+    }
+
+    /// Copies the recordings (.mov + .json + .csv) into the cloud sync folder.
+    private func upload(_ list: [RecordingStore.Item]) {
+        guard !list.isEmpty else { return }
+        busy = true
+        CloudSync.copy(list.flatMap { CloudSync.recordingFiles($0.url) }) { msg in
+            busy = false
+            message = msg
+            selecting = false
+            selection = []
         }
     }
 

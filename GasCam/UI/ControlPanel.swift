@@ -62,6 +62,7 @@ struct ControlPanel: View {
                 InfoButton(.shutter)
                 Spacer()
             }
+            actualShutterNote
             HStack(spacing: 6) {
                 Text(L("电网")).font(Theme.mono(10, .semibold)).foregroundStyle(.gray)
                 PillButton(text: "60Hz", selected: camera.mainsHz == 60) { camera.mainsHz = 60 }
@@ -98,6 +99,26 @@ struct ControlPanel: View {
         }
     }
 
+    /// The sensor rounds the exposure to its line time: show the real value when it differs, and warn
+    /// when a flicker-free setting is not flicker-free any more (e.g. 1/60 at 60 fps).
+    @ViewBuilder private var actualShutterNote: some View {
+        let set = camera.shutter, act = camera.actualShutter
+        if act > 0, set > 0, abs(act / set - 1) > 0.004 {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(String(format: L("设定 %@，传感器实际 1/%.1f"), set.shutterLabel, 1 / act))
+                    .font(Theme.mono(10)).foregroundStyle(.gray)
+                if camera.isFlickerFree(set) && !camera.isFlickerFree(act) {
+                    let period = 1 / (2 * camera.mainsHz)
+                    let k = (set / period).rounded()
+                    let shorter = k >= 2 ? (k - 1) * period : nil
+                    Text(String(format: L("实际快门已不是防频闪值（%d fps 时传感器做不到 %@）。建议改用 30 fps，或把快门设成 %@。"),
+                                camera.frameRate.safeInt, set.shutterLabel, shorter?.shutterLabel ?? "—"))
+                        .font(Theme.mono(10)).foregroundStyle(.orange)
+                }
+            }
+        }
+    }
+
     // MARK: ISO
 
     private var isoPanel: some View {
@@ -107,7 +128,7 @@ struct ControlPanel: View {
                 Text("ISO \(camera.iso.safeInt)").font(Theme.mono(13, .semibold))
                 Spacer()
             }
-            Text(String(format: L("AUTO：框内最亮的 2%% 像素调到约 85%%；先用闪光灯，不够再升 ISO（最高 %d）。"), Int(camera.autoISOCap)))
+            Text(String(format: L("AUTO：框内最亮的 2%% 像素调到约 85%%；只调 ISO（最高 %d），闪光灯保持手动设定。"), Int(camera.autoISOCap)))
                 .font(Theme.mono(10)).foregroundStyle(.gray)
             chipsRow(CameraPresets.isoValues.filter { camera.isoRange.contains($0) }.map { "\(Int($0))" },
                      selected: camera.exposureAuto ? "" : "\(camera.iso.safeInt)") { s in
@@ -208,14 +229,10 @@ struct ControlPanel: View {
     private var torchPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             if camera.hasTorch {
+                Text(L("闪光灯只能手动设定，AUTO 不会改变它。"))
+                    .font(Theme.mono(10)).foregroundStyle(.gray)
                 HStack(spacing: 6) {
-                    PillButton(text: "AUTO", selected: camera.torchAuto) { camera.setTorchAuto(!camera.torchAuto) }
-                    Text(camera.torchAuto ? String(format: L("自动：按分析框亮度调节（最高 %d%%），LOCK / BASELINE 时固定"), Int((camera.autoTorchLimit * 100).rounded())) : L("手动"))
-                        .font(Theme.mono(10)).foregroundStyle(.gray)
-                    Spacer()
-                }
-                HStack(spacing: 6) {
-                    PillButton(text: "OFF", selected: !camera.torchAuto && camera.torchLevel <= 0.001) { camera.setTorch(0) }
+                    PillButton(text: "OFF", selected: camera.torchLevel <= 0.001) { camera.setTorch(0) }
                     ForEach(CameraPresets.torchPresets, id: \.self) { lvl in
                         PillButton(text: "\(Int(lvl * 100))%", selected: abs(camera.torchLevel - lvl) < 0.01) { camera.setTorch(lvl) }
                     }

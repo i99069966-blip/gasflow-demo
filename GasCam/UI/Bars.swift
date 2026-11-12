@@ -289,6 +289,7 @@ struct PlaybackBar: View {
     @Binding var showSettings: Bool
     @State private var scrubbing = false
     @State private var scrubValue: Double = 0
+    @State private var showExport = false
     static let speeds: [(String, Double)] = [("0.1×", 0.1), ("0.25×", 0.25), ("0.5×", 0.5), ("1×", 1), ("2×", 2), ("MAX", 0)]
     private var speeds: [(String, Double)] { Self.speeds }
 
@@ -348,8 +349,10 @@ struct PlaybackBar: View {
                 }
                 Spacer(minLength: 0)
                 Button { pipeline.saveResultImage() } label: { Image(systemName: "camera.viewfinder") }
+                Button { showExport = true } label: { Image(systemName: "square.and.arrow.up") }
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
                 Button { pipeline.closeVideo() } label: { Image(systemName: "xmark.circle.fill") }
+                    .disabled(pipeline.exportProgress != nil)
             }
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(.white)
@@ -358,6 +361,9 @@ struct PlaybackBar: View {
         .background(Theme.bar)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 6)
+        .sheet(isPresented: $showExport) {
+            ExportSheet().environmentObject(pipeline)
+        }
     }
 }
 

@@ -465,6 +465,19 @@ final class GasAnalyzer {
         return result
     }
 
+    /// Arrival time of every pixel under the current arrival rule, in seconds after `arrivalOrigin`
+    /// (the end of the baseline); −1 = not reached.
+    func arrivalSnapshot() -> [Float] {
+        let src: UnsafeMutablePointer<Float> = params.arrivalMode == .adaptive ? arrivalA : arrival
+        return Array(UnsafeBufferPointer(start: src, count: count))
+    }
+
+    /// Time (same clock as `process(time:)`) at which the baseline ended; arrival times count from here.
+    var arrivalOrigin: Double { originTime }
+
+    /// 1 = pixel used by the analysis (inside the regions, not saturated or too dark).
+    func validSnapshot() -> [UInt8] { Array(UnsafeBufferPointer(start: valid, count: count)) }
+
     // MARK: - Source estimate
 
     private func estimateSource() -> GasSource? {
