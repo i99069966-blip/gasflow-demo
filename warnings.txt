@@ -1,0 +1,9 @@
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/VideoExporter.swift:2:1: warning: add '@preconcurrency' to suppress 'Sendable'-related warnings from module 'AVFoundation'
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/VideoExporter.swift:89:51: warning: capture of 'self' with non-Sendable type 'VideoExporter' in a '@Sendable' closure
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/VideoExporter.swift:89:90: warning: capture of 'track' with non-Sendable type 'AVAssetTrack' in a '@Sendable' closure
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:83:27: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:83:62: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:86:44: warning: capture of 'self' with non-Sendable type 'VideoFileSource' in a '@Sendable' closure
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:87:36: warning: capture of 'self' with non-Sendable type 'VideoFileSource' in a '@Sendable' closure
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:90:44: warning: capture of 'self' with non-Sendable type 'VideoFileSource' in a '@Sendable' closure
+2026-11-12 03:07:19.350 appintentsmetadataprocessor[4722:17967] warning: Metadata extraction skipped. No AppIntents.framework dependency found.

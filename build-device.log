@@ -1,0 +1,442 @@
+Command line invocation:
+    /Applications/Xcode_26.6.app/Contents/Developer/usr/bin/xcodebuild -project GasCam.xcodeproj -target GasCam -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= build
+
+Build settings from command line:
+    CODE_SIGN_IDENTITY = 
+    CODE_SIGNING_ALLOWED = NO
+    CODE_SIGNING_REQUIRED = NO
+    SDKROOT = iphoneos26.5
+
+note: Using codesigning identity override: 
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (1 target)
+    Target 'GasCam' in project 'GasCam' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode_26.6.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode_26.6.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+Build description signature: 499f13d85312635829837e30d6ab4b8b
+Build description path: /Users/runner/work/gasflow-demo/gasflow-demo/build/XCBuildData/499f13d85312635829837e30d6ab4b8b.xcbuilddata
+ClangStatCache /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/C/com.apple.DeveloperTools/26.6-17F113/Xcode/SDKStatCaches.noindex/iphoneos26.5-23F81a-688ef53f1462e2c8f657fdc38a81448fee66e23052a0157c865c76b268046726.sdkstatcache
+    cd /Users/runner/work/gasflow-demo/gasflow-demo/GasCam.xcodeproj
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -o /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/C/com.apple.DeveloperTools/26.6-17F113/Xcode/SDKStatCaches.noindex/iphoneos26.5-23F81a-688ef53f1462e2c8f657fdc38a81448fee66e23052a0157c865c76b268046726.sdkstatcache
+
+CreateBuildDirectory /Users/runner/work/gasflow-demo/gasflow-demo/build
+    cd /Users/runner/work/gasflow-demo/gasflow-demo/GasCam.xcodeproj
+    builtin-create-build-directory /Users/runner/work/gasflow-demo/gasflow-demo/build
+
+CreateBuildDirectory /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules
+    cd /Users/runner/work/gasflow-demo/gasflow-demo/GasCam.xcodeproj
+    builtin-create-build-directory /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam-d471ac50b2fcb297fd3f6e2afacfe7d1-VFS-iphoneos/all-product-headers.yaml
+    cd /Users/runner/work/gasflow-demo/gasflow-demo/GasCam.xcodeproj
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam-d471ac50b2fcb297fd3f6e2afacfe7d1-VFS-iphoneos/all-product-headers.yaml
+
+CreateBuildDirectory /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos
+    cd /Users/runner/work/gasflow-demo/gasflow-demo/GasCam.xcodeproj
+    builtin-create-build-directory /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos
+
+CreateBuildDirectory /Users/runner/work/gasflow-demo/gasflow-demo/build/ExplicitPrecompiledModules
+    cd /Users/runner/work/gasflow-demo/gasflow-demo/GasCam.xcodeproj
+    builtin-create-build-directory /Users/runner/work/gasflow-demo/gasflow-demo/build/ExplicitPrecompiledModules
+
+CreateBuildDirectory /Users/runner/work/gasflow-demo/gasflow-demo/build/EagerLinkingTBDs/Release-iphoneos
+    cd /Users/runner/work/gasflow-demo/gasflow-demo/GasCam.xcodeproj
+    builtin-create-build-directory /Users/runner/work/gasflow-demo/gasflow-demo/build/EagerLinkingTBDs/Release-iphoneos
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam_const_extract_protocols.json (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam_const_extract_protocols.json
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.SwiftFileList (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.SwiftFileList
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.SwiftConstValuesFileList (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.SwiftConstValuesFileList
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.LinkFileList (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.LinkFileList
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-OutputFileMap.json (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-OutputFileMap.json
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam.hmap (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam.hmap
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam.DependencyStaticMetadataFileList (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam.DependencyStaticMetadataFileList
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam.DependencyMetadataFileList (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam.DependencyMetadataFileList
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-project-headers.hmap (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-project-headers.hmap
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-own-target-headers.hmap (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-own-target-headers.hmap
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-generated-files.hmap (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-generated-files.hmap
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-all-target-headers.hmap (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-all-target-headers.hmap
+
+WriteAuxiliaryFile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-all-non-framework-target-headers.hmap (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    write-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-all-non-framework-target-headers.hmap
+
+MkDir /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    /bin/mkdir -p /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app
+
+MkDir /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_output/thinned (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    /bin/mkdir -p /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_output/thinned
+
+MkDir /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_output/unthinned (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    /bin/mkdir -p /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_output/unthinned
+
+GenerateAssetSymbols /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Assets.xcassets (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    /Applications/Xcode_26.6.app/Contents/Developer/usr/bin/actool /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Assets.xcassets --compile /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app --output-format human-readable-text --notices --warnings --export-dependency-info /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_dependencies --output-partial-info-plist /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_generated_info.plist --app-icon AppIcon --accent-color AccentColor --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --minimum-deployment-target 17.0 --platform iphoneos --bundle-identifier jp.lab.lspr.GasCam --generate-swift-asset-symbols /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/GeneratedAssetSymbols.swift --generate-objc-asset-symbols /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/GeneratedAssetSymbols.h --generate-asset-symbol-index /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/GeneratedAssetSymbols-Index.plist
+/* com.apple.actool.compilation-results */
+/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/GeneratedAssetSymbols-Index.plist
+/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/GeneratedAssetSymbols.h
+/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/GeneratedAssetSymbols.swift
+
+
+CompileAssetCatalogVariant thinned /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Assets.xcassets (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    /Applications/Xcode_26.6.app/Contents/Developer/usr/bin/actool /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Assets.xcassets --compile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_output/thinned --output-format human-readable-text --notices --warnings --export-dependency-info /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_dependencies_thinned --output-partial-info-plist /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_generated_info.plist_thinned --app-icon AppIcon --accent-color AccentColor --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --minimum-deployment-target 17.0 --platform iphoneos
+/* com.apple.actool.compilation-results */
+/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_generated_info.plist_thinned
+/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_output/thinned/AppIcon60x60@2x.png
+/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_output/thinned/AppIcon76x76@2x~ipad.png
+/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_output/thinned/Assets.car
+
+
+SwiftDriver GasCam normal arm64 com.apple.xcode.tools.swift.compiler (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-SwiftDriver -- /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name GasCam -O -whole-module-optimization @/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.SwiftFileList -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -target arm64-apple-ios17.0 -g -Xfrontend -serialize-debugging-options -swift-version 5 -I /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos -F /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos -emit-localized-strings -emit-localized-strings-path /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64 -c -num-threads 3 -Xcc -ivfsstatcache -Xcc /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/C/com.apple.DeveloperTools/26.6-17F113/Xcode/SDKStatCaches.noindex/iphoneos26.5-23F81a-688ef53f1462e2c8f657fdc38a81448fee66e23052a0157c865c76b268046726.sdkstatcache -output-file-map /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.swiftmodule -validate-clang-modules-once -clang-build-session-file /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/C/org.llvm.clang/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam_const_extract_protocols.json -Xcc -iquote -Xcc /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-generated-files.hmap -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-own-target-headers.hmap -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-all-target-headers.hmap -Xcc -iquote -Xcc /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-project-headers.hmap -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/include -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources -emit-objc-header -emit-objc-header-path /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-Swift.h -working-directory /Users/runner/work/gasflow-demo/gasflow-demo -no-emit-module-separately-wmo
+
+SwiftDriver\ Compilation GasCam normal arm64 com.apple.xcode.tools.swift.compiler (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-Swift-Compilation -- /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name GasCam -O -whole-module-optimization @/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.SwiftFileList -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -target arm64-apple-ios17.0 -g -Xfrontend -serialize-debugging-options -swift-version 5 -I /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos -F /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos -emit-localized-strings -emit-localized-strings-path /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64 -c -num-threads 3 -Xcc -ivfsstatcache -Xcc /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/C/com.apple.DeveloperTools/26.6-17F113/Xcode/SDKStatCaches.noindex/iphoneos26.5-23F81a-688ef53f1462e2c8f657fdc38a81448fee66e23052a0157c865c76b268046726.sdkstatcache -output-file-map /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.swiftmodule -validate-clang-modules-once -clang-build-session-file /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/C/org.llvm.clang/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam_const_extract_protocols.json -Xcc -iquote -Xcc /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-generated-files.hmap -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-own-target-headers.hmap -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-all-target-headers.hmap -Xcc -iquote -Xcc /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-project-headers.hmap -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/include -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources -emit-objc-header -emit-objc-header-path /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-Swift.h -working-directory /Users/runner/work/gasflow-demo/gasflow-demo -no-emit-module-separately-wmo
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_stddef-EP8K7PFNKAZHXT9BKMABPGEN4.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_SwiftConcurrencyShims-D9R5TTILSZB654L9H4ITN8GZN.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ptrcheck-8VKEI1ZULAI6Q6ELI7I4798V6.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ptrauth-7HRNRV1R99MZ9OK3AEGLEGTZN.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_AvailabilityInternal-DWNSU0HC51SHQBUT5XQM3X9YE.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/SwiftShims-7CZAHCCBW6Y9NY3JVLECLET0J.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_stdbool-EIP877FK1LCOH73PZQ1702Y1G.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_DarwinFoundation1-5CUGZY5FQHJ6GYXOZYU4G37SE.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_stdarg-AAKTX0CH9MGI7LV980VJBX63G.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_float-4YG22XOZSYT6CN0JR91BXBB94.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_limits-A4R93YG09Q0136JB8PKM4X74Z.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_DarwinFoundation2-6ACHYT0D2CRVLWAPIJGE0JRSX.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ExtensionFoundation-3IU8RIHQQYERCVWVT36VXT2Q9.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/DeveloperToolsSupport-6ZKF22P7A40TTSLN90H32QY1D.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/sys_types-B57K6GMMZU24T8KGEZVLU4HW4.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_tgmath-1N0AYRRIS4G6TZ5W28AAB4L4J.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_stdint-DWAYH94BNVII2O0RAZI6WP3ZK.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_intrinsics-9QPO9JIHK9TZIPUTYL2G5AC23.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_DarwinFoundation3-5JEG52758PMDWOJHQHEIOHQ7O.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_stdatomic-6DRGQD5P05U49SSN5NB8UDTC8.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_inttypes-B0NIH0GF0HIG33NBGPFQCNYEQ.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Darwin-AACOS777LZUXWNP1Z1VE4M105.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/simd-1K0XU4A243CI4VQ4K0L64XYYB.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/MachO-EX9W9CF42DENVL3KRWDAUJV83.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ObjectiveC-DLAHX5KXWSQGBD2C680YONX5G.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Spatial-3DLTQXE92GJQOIOC2VWPBA136.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/os_object-4VPELLGR1MGUBPOV5P9DK1DT0.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/os_workgroup-CNPW1FKQQO7YBW7ZYBZUIAV26.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Dispatch-BJ0317CEAE519I96ZM8DB86DH.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/XPC-ATR7KV5RZXMOLHGYU3KD2DBUW.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreFoundation-7GQ2FR5O9R6JQ78NGQ3OX5DHJ.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/dnssd-1WVHDA0J9EODOIRTRQ7EXL65.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/os-3WXQJ2APFB2NBKCJ5WXQ7JES8.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Security-39KZBFMUR6AGF314GJ1U4LUID.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreGraphics-1J7AE77Q3SDA90FY3R0YPSLOR.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CFNetwork-3E90YAL9Y8WUOUP8RQ5JVYC02.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreAudioTypes-228BJGZZM6IHT6MJMM2D6O22Z.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ImageIO-5DV2GRLCIQ4ZMC3GK0JFV4JZQ.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreText-4U9YFLSPZJWSY60ASNYALAXBI.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Foundation-CVH4ZX04Q029LTNWJ97E2A61N.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreAudio-BFIF5FTQU35VJMC7ZBMYDUL37.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ModelIO-7GQYBWX14JTC2FHC30JOJH3RZ.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/UniformTypeIdentifiers-90LOFFXA5VB1KO0NE61PT1SYX.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/DataDetection-CDU26AY6LJ6HF2HCCG9DWZS1A.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreTransferable-20D00M7WFYX10CFUDWGD7LOEX.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreData-4LSMIQ8SNSP4FAV66CCQTYT97.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/UIUtilities-C0W3C07U4D1TE37WOY4ARGVBB.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Symbols-2CL0H2178YAGIPPW5QPYF30LZ.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Accessibility-35SNJQW2M2PVLW4V2JA65KUON.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/IOSurface-8SU8PJTLX29UZH8KY3Z85S21S.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_LocationEssentials-8144ZKOJLVVLYVI8ATVAGHG4W.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Network-63DUSZSQSUHKCZ7JYK1JMZ1UA.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Metal-9F55BQWC5B8Q0J6PY6HEO6PEL.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/OpenGLES-7TBP7A8088Y37WE7L344X8ELM.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreLocation-B0QYT6GB1D8C5HTYPR0H0JFA7.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/AVRouting-47UCOKVGO5T4GWA8KUU21BWFK.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreVideo-6OA8UCHIUQYSGYXW5MU75BVLI.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreMIDI-EGLZXRDESKQ380B2S6VL53FVA.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/UserNotifications-9KABPRVF5XWI82JBLDZGQMDT9.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreImage-5DJ9FMZ5WHVNCQSNBGQ4Y3RIP.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/AudioToolbox-9EN5WHVSGQ3G6EI9QNCQFPKEP.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/QuartzCore-AN2ZZC5UV6LXBI0IRGS0HDKCK.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Accelerate-AVDUV91HNO69CIYEGGL1TQWST.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreMedia-7TEXBJPC7BII4EO57OTWZ252J.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/OSLog-AOZMIZV4G6R5OD4UJPUBK65IA.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/AVFAudio-6DPDWY7VGRFYHO1Q350CAHGK5.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/SwiftUICore-YGYPJUZX3TWGYMYR5XITJQTS.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/MetricKit-AVRXM2I5EKD0QHPV3MG7KS2TU.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/MediaToolbox-EXANMSC0L83QPELM1HYYET9OW.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreMotion-EWV37AL88KXJXBJ0RBPVIVNWE.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/AVFoundation-10OKSB909YCPTZTF9Q2185T3D.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/FileProvider-8U5UU73XZB3YFY07WQ618BPN7.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/UIKit-6VHD4BLJZYMA2XATQUJ7SQWE9.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Photos-E7V695CQ7KCMP3VKM84Q9CEX0.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/SwiftUI-20DCG2FJJABWRSN99FROQKTU9.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/MetalKit-EH0LW0M95PRE42NYIJQC9H55M.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/PhotosUI-97YT8DTRDWNHHJ7F6QB1CS4R0.pcm
+
+SwiftCompile normal arm64 Compiling\ Colormap.swift,\ FrameDownsampler.swift,\ GasAnalyzer.swift,\ GasModels.swift,\ CameraController.swift,\ CameraSettings.swift,\ VideoRecorder.swift,\ CrashReporter.swift,\ Localization.swift,\ Strings.swift,\ CloudSync.swift,\ FramePipeline.swift,\ RecordingStore.swift,\ VideoExporter.swift,\ VideoFileSource.swift,\ MetalPreviewView.swift,\ PreviewRenderer.swift,\ Bars.swift,\ ChartView.swift,\ Components.swift,\ ContentView.swift,\ ControlPanel.swift,\ ExportView.swift,\ Help.swift,\ HistogramView.swift,\ PreviewArea.swift,\ RegionEditor.swift,\ SettingsView.swift,\ TopBar.swift,\ GasCamApp.swift,\ GeneratedAssetSymbols.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Analysis/Colormap.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Analysis/FrameDownsampler.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Analysis/GasAnalyzer.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Analysis/GasModels.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Camera/CameraController.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Camera/CameraSettings.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Camera/VideoRecorder.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Diagnostics/CrashReporter.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Localization/Localization.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Localization/Strings.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/CloudSync.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/FramePipeline.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/RecordingStore.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/VideoExporter.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Rendering/MetalPreviewView.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Rendering/PreviewRenderer.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/Bars.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/ChartView.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/Components.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/ContentView.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/ControlPanel.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/ExportView.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/Help.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/HistogramView.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/PreviewArea.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/RegionEditor.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/SettingsView.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/UI/TopBar.swift /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/GasCamApp.swift /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/GeneratedAssetSymbols.swift /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/_StringProcessing.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreFoundation.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreMotion.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/FileProvider.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/ObjectiveC.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Synchronization.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Dispatch.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Symbols.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreImage.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreText.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreVideo.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Distributed.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreAudio.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/LightweightCodeRequirements.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/UniformTypeIdentifiers.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/SwiftUICore.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/_DarwinFoundation2.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/ModelIO.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/XPC.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Observation.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Photos.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/AudioToolbox.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/AVFoundation.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/ExtensionFoundation.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/OSLog.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/DeveloperToolsSupport.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Metal.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/PhotosUI.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Accessibility.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Network.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/AVFAudio.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/_PhotosUI_SwiftUI.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/simd.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Combine.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/_DarwinFoundation3.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Accelerate.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Foundation.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/_Builtin_float.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/_DarwinFoundation1.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/QuartzCore.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/System.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/UIKit.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Swift.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Spatial.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/_Concurrency.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreData.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreTransferable.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreMIDI.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreMedia.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreGraphics.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/DataDetection.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/Darwin.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/MetalKit.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/MetricKit.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/CoreLocation.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/SwiftUI.swiftmodule/arm64e-apple-ios.swiftmodule /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos/prebuilt-modules/26.5/os.swiftmodule/arm64e-apple-ios.swiftmodule /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreMIDI-EGLZXRDESKQ380B2S6VL53FVA.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ptrauth-7HRNRV1R99MZ9OK3AEGLEGTZN.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreMotion-EWV37AL88KXJXBJ0RBPVIVNWE.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_float-4YG22XOZSYT6CN0JR91BXBB94.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Darwin-AACOS777LZUXWNP1Z1VE4M105.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ImageIO-5DV2GRLCIQ4ZMC3GK0JFV4JZQ.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/MetalKit-EH0LW0M95PRE42NYIJQC9H55M.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/MetricKit-AVRXM2I5EKD0QHPV3MG7KS2TU.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreText-4U9YFLSPZJWSY60ASNYALAXBI.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/QuartzCore-AN2ZZC5UV6LXBI0IRGS0HDKCK.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_stdarg-AAKTX0CH9MGI7LV980VJBX63G.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CFNetwork-3E90YAL9Y8WUOUP8RQ5JVYC02.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/AVFoundation-10OKSB909YCPTZTF9Q2185T3D.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/AudioToolbox-9EN5WHVSGQ3G6EI9QNCQFPKEP.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/AVRouting-47UCOKVGO5T4GWA8KUU21BWFK.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_inttypes-B0NIH0GF0HIG33NBGPFQCNYEQ.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ObjectiveC-DLAHX5KXWSQGBD2C680YONX5G.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_AvailabilityInternal-DWNSU0HC51SHQBUT5XQM3X9YE.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreData-4LSMIQ8SNSP4FAV66CCQTYT97.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/OSLog-AOZMIZV4G6R5OD4UJPUBK65IA.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_stdbool-EIP877FK1LCOH73PZQ1702Y1G.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Accessibility-35SNJQW2M2PVLW4V2JA65KUON.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreTransferable-20D00M7WFYX10CFUDWGD7LOEX.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_DarwinFoundation3-5JEG52758PMDWOJHQHEIOHQ7O.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/FileProvider-8U5UU73XZB3YFY07WQ618BPN7.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_stddef-EP8K7PFNKAZHXT9BKMABPGEN4.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/sys_types-B57K6GMMZU24T8KGEZVLU4HW4.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/DeveloperToolsSupport-6ZKF22P7A40TTSLN90H32QY1D.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/DataDetection-CDU26AY6LJ6HF2HCCG9DWZS1A.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_LocationEssentials-8144ZKOJLVVLYVI8ATVAGHG4W.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/simd-1K0XU4A243CI4VQ4K0L64XYYB.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_stdint-DWAYH94BNVII2O0RAZI6WP3ZK.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/UIUtilities-C0W3C07U4D1TE37WOY4ARGVBB.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/XPC-ATR7KV5RZXMOLHGYU3KD2DBUW.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ExtensionFoundation-3IU8RIHQQYERCVWVT36VXT2Q9.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreImage-5DJ9FMZ5WHVNCQSNBGQ4Y3RIP.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/SwiftShims-7CZAHCCBW6Y9NY3JVLECLET0J.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ModelIO-7GQYBWX14JTC2FHC30JOJH3RZ.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/UserNotifications-9KABPRVF5XWI82JBLDZGQMDT9.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/os-3WXQJ2APFB2NBKCJ5WXQ7JES8.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Security-39KZBFMUR6AGF314GJ1U4LUID.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/IOSurface-8SU8PJTLX29UZH8KY3Z85S21S.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Network-63DUSZSQSUHKCZ7JYK1JMZ1UA.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Metal-9F55BQWC5B8Q0J6PY6HEO6PEL.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/AVFAudio-6DPDWY7VGRFYHO1Q350CAHGK5.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/OpenGLES-7TBP7A8088Y37WE7L344X8ELM.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/PhotosUI-97YT8DTRDWNHHJ7F6QB1CS4R0.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/UniformTypeIdentifiers-90LOFFXA5VB1KO0NE61PT1SYX.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/SwiftUICore-YGYPJUZX3TWGYMYR5XITJQTS.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/os_object-4VPELLGR1MGUBPOV5P9DK1DT0.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Accelerate-AVDUV91HNO69CIYEGGL1TQWST.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Photos-E7V695CQ7KCMP3VKM84Q9CEX0.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_SwiftConcurrencyShims-D9R5TTILSZB654L9H4ITN8GZN.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreGraphics-1J7AE77Q3SDA90FY3R0YPSLOR.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/UIKit-6VHD4BLJZYMA2XATQUJ7SQWE9.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Symbols-2CL0H2178YAGIPPW5QPYF30LZ.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreFoundation-7GQ2FR5O9R6JQ78NGQ3OX5DHJ.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreMedia-7TEXBJPC7BII4EO57OTWZ252J.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreVideo-6OA8UCHIUQYSGYXW5MU75BVLI.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreAudioTypes-228BJGZZM6IHT6MJMM2D6O22Z.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Dispatch-BJ0317CEAE519I96ZM8DB86DH.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_tgmath-1N0AYRRIS4G6TZ5W28AAB4L4J.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/ptrcheck-8VKEI1ZULAI6Q6ELI7I4798V6.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/dnssd-1WVHDA0J9EODOIRTRQ7EXL65.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_stdatomic-6DRGQD5P05U49SSN5NB8UDTC8.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/MachO-EX9W9CF42DENVL3KRWDAUJV83.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Spatial-3DLTQXE92GJQOIOC2VWPBA136.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/os_workgroup-CNPW1FKQQO7YBW7ZYBZUIAV26.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_intrinsics-9QPO9JIHK9TZIPUTYL2G5AC23.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_DarwinFoundation1-5CUGZY5FQHJ6GYXOZYU4G37SE.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreAudio-BFIF5FTQU35VJMC7ZBMYDUL37.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/CoreLocation-B0QYT6GB1D8C5HTYPR0H0JFA7.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_Builtin_limits-A4R93YG09Q0136JB8PKM4X74Z.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/Foundation-CVH4ZX04Q029LTNWJ97E2A61N.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/_DarwinFoundation2-6ACHYT0D2CRVLWAPIJGE0JRSX.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/SwiftUI-20DCG2FJJABWRSN99FROQKTU9.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules/MediaToolbox-EXANMSC0L83QPELM1HYYET9OW.pcm /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-dependencies-1.json (in target 'GasCam' from project 'GasCam')
+CompileSwift normal arm64 (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/VideoExporter.swift:89:51: warning: capture of 'self' with non-Sendable type 'VideoExporter' in a '@Sendable' closure
+                        let (files, folder) = try self.process(req, asset: asset, track: track, size: size,
+                                                  ^
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/VideoExporter.swift:51:13: note: class 'VideoExporter' does not conform to the 'Sendable' protocol
+final class VideoExporter {
+            ^
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/VideoExporter.swift:89:90: warning: capture of 'track' with non-Sendable type 'AVAssetTrack' in a '@Sendable' closure
+                        let (files, folder) = try self.process(req, asset: asset, track: track, size: size,
+                                                                                         ^
+/Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk/System/Library/Frameworks/AVFoundation.framework/Headers/AVAssetTrack.h:29:12: note: class 'AVAssetTrack' does not conform to the 'Sendable' protocol
+@interface AVAssetTrack : NSObject <NSCopying, AVAsynchronousKeyValueLoading>
+           ^
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Pipeline/VideoExporter.swift:2:1: warning: add '@preconcurrency' to suppress 'Sendable'-related warnings from module 'AVFoundation'
+import AVFoundation
+^
+@preconcurrency 
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:83:27: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+                self.lock.lock(); self.loaded = l; self.lock.unlock()
+                          ^
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+open func lock()}
+          ^
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:83:62: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+                self.lock.lock(); self.loaded = l; self.lock.unlock()
+                                                             ^
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+open func unlock()}
+          ^
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:86:44: warning: capture of 'self' with non-Sendable type 'VideoFileSource' in a '@Sendable' closure
+                DispatchQueue.main.async { self.onLoaded?(fpsD, durD) }
+                                           ^
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:8:13: note: class 'VideoFileSource' does not conform to the 'Sendable' protocol
+final class VideoFileSource {
+            ^
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:87:36: warning: capture of 'self' with non-Sendable type 'VideoFileSource' in a '@Sendable' closure
+                self.queue.async { self.readLoop(l, from: 0, display: 0, generation: gen) }
+                                   ^
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:8:13: note: class 'VideoFileSource' does not conform to the 'Sendable' protocol
+final class VideoFileSource {
+            ^
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:90:44: warning: capture of 'self' with non-Sendable type 'VideoFileSource' in a '@Sendable' closure
+                DispatchQueue.main.async { self.onFinish?(msg) }
+                                           ^
+/Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Playback/VideoFileSource.swift:8:13: note: class 'VideoFileSource' does not conform to the 'Sendable' protocol
+final class VideoFileSource {
+            ^
+
+LinkAssetCatalog /Users/runner/work/gasflow-demo/gasflow-demo/GasCam/Assets.xcassets (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-linkAssetCatalog --thinned /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_output/thinned --thinned-dependencies /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_dependencies_thinned --thinned-info-plist-content /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_generated_info.plist_thinned --unthinned /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_output/unthinned --unthinned-dependencies /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_dependencies_unthinned --unthinned-info-plist-content /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_generated_info.plist_unthinned --output /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app --plist-output /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_generated_info.plist
+note: Emplaced /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/AppIcon60x60@2x.png (in target 'GasCam' from project 'GasCam')
+note: Emplaced /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/Assets.car (in target 'GasCam' from project 'GasCam')
+note: Emplaced /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/AppIcon76x76@2x~ipad.png (in target 'GasCam' from project 'GasCam')
+
+ProcessInfoPlistFile /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/Info.plist /Users/runner/work/gasflow-demo/gasflow-demo/GasCam-Info.plist (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-infoPlistUtility /Users/runner/work/gasflow-demo/gasflow-demo/GasCam-Info.plist -producttype com.apple.product-type.application -genpkginfo /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/PkgInfo -expandbuildsettings -format binary -platform iphoneos -additionalcontentfile /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/assetcatalog_generated_info.plist -requiredArchitecture arm64 -o /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/Info.plist
+
+SwiftDriverJobDiscovery normal arm64 Compiling Colormap.swift, FrameDownsampler.swift, GasAnalyzer.swift, GasModels.swift, CameraController.swift, CameraSettings.swift, VideoRecorder.swift, CrashReporter.swift, Localization.swift, Strings.swift, CloudSync.swift, FramePipeline.swift, RecordingStore.swift, VideoExporter.swift, VideoFileSource.swift, MetalPreviewView.swift, PreviewRenderer.swift, Bars.swift, ChartView.swift, Components.swift, ContentView.swift, ControlPanel.swift, ExportView.swift, Help.swift, HistogramView.swift, PreviewArea.swift, RegionEditor.swift, SettingsView.swift, TopBar.swift, GasCamApp.swift, GeneratedAssetSymbols.swift (in target 'GasCam' from project 'GasCam')
+
+SwiftDriver\ Compilation\ Requirements GasCam normal arm64 com.apple.xcode.tools.swift.compiler (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name GasCam -O -whole-module-optimization @/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.SwiftFileList -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -target arm64-apple-ios17.0 -g -Xfrontend -serialize-debugging-options -swift-version 5 -I /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos -F /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos -emit-localized-strings -emit-localized-strings-path /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64 -c -num-threads 3 -Xcc -ivfsstatcache -Xcc /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/C/com.apple.DeveloperTools/26.6-17F113/Xcode/SDKStatCaches.noindex/iphoneos26.5-23F81a-688ef53f1462e2c8f657fdc38a81448fee66e23052a0157c865c76b268046726.sdkstatcache -output-file-map /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/runner/work/gasflow-demo/gasflow-demo/build/SwiftExplicitPrecompiledModules -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.swiftmodule -validate-clang-modules-once -clang-build-session-file /var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/C/org.llvm.clang/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam_const_extract_protocols.json -Xcc -iquote -Xcc /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-generated-files.hmap -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-own-target-headers.hmap -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-all-target-headers.hmap -Xcc -iquote -Xcc /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam-project-headers.hmap -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/include -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources -emit-objc-header -emit-objc-header-path /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-Swift.h -working-directory /Users/runner/work/gasflow-demo/gasflow-demo -no-emit-module-separately-wmo
+
+SwiftMergeGeneratedHeaders /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/GasCam-Swift.h /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-Swift.h (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-swiftHeaderTool -arch arm64 /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-Swift.h -o /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/DerivedSources/GasCam-Swift.h
+
+Copy /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.swiftmodule/arm64-apple-ios.swiftmodule /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.swiftmodule (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.swiftmodule /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.swiftmodule/arm64-apple-ios.swiftmodule
+
+Copy /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.swiftmodule/arm64-apple-ios.swiftdoc /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.swiftdoc (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.swiftdoc /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.swiftmodule/arm64-apple-ios.swiftdoc
+
+Copy /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.swiftmodule/arm64-apple-ios.abi.json /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.abi.json (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.abi.json /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.swiftmodule/arm64-apple-ios.abi.json
+
+Copy /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.swiftmodule/Project/arm64-apple-ios.swiftsourceinfo /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.swiftsourceinfo (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.swiftsourceinfo /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.swiftmodule/Project/arm64-apple-ios.swiftsourceinfo
+
+Ld /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/GasCam normal (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios17.0 -isysroot /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk -Os -L/Users/runner/work/gasflow-demo/gasflow-demo/build/EagerLinkingTBDs/Release-iphoneos -L/Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos -F/Users/runner/work/gasflow-demo/gasflow-demo/build/EagerLinkingTBDs/Release-iphoneos -F/Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos -filelist /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.LinkFileList -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker @executable_path/Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam_lto.o -Xlinker -dependency_info -Xlinker /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.swiftmodule @/Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam-linker-args.resp -o /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/GasCam
+
+GenerateDSYMFile /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app.dSYM /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/GasCam (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/dsymutil /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/GasCam -o /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app.dSYM
+
+CopySwiftLibs /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-swiftStdLibTool --copy --verbose --scan-executable /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/GasCam --scan-folder /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/Frameworks --scan-folder /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/PlugIns --scan-folder /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/SystemExtensions --scan-folder /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/Extensions --platform iphoneos --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.gWN3Tl/Metal.xctoolchain --toolchain /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os --back-deploy-swift-span
+Ignoring --strip-bitcode because --sign was not passed
+
+ExtractAppIntentsMetadata (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.gWN3Tl/Metal.xctoolchain --module-name GasCam --sdk-root /Applications/Xcode_26.6.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk --xcode-version 17F113 --platform-family iOS --deployment-target 17.0 --bundle-identifier jp.lab.lspr.GasCam --output /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app --target-triple arm64-apple-ios17.0 --binary-file /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/GasCam --dependency-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam_dependency_info.dat --stringsdata-file /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.SwiftFileList --metadata-file-list /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam.DependencyMetadataFileList --static-metadata-file-list /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam.DependencyStaticMetadataFileList --swift-const-vals-list /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/Objects-normal/arm64/GasCam.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-11-12 03:07:19.332 appintentsmetadataprocessor[4722:17967] Starting appintentsmetadataprocessor export
+2026-11-12 03:07:19.350 appintentsmetadataprocessor[4722:17967] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+AppIntentsSSUTraining (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/Info.plist --temp-dir-path /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/ssu --bundle-id jp.lab.lspr.GasCam --product-path /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app --extracted-metadata-path /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/Metadata.appintents --metadata-file-list /Users/runner/work/gasflow-demo/gasflow-demo/build/GasCam.build/Release-iphoneos/GasCam.build/GasCam.DependencyMetadataFileList --source-file /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app/Info.plist --archive-ssu-assets
+2026-11-12 03:07:19.406 appintentsnltrainingprocessor[4750:18022] Parsing options for appintentsnltrainingprocessor
+2026-11-12 03:07:19.407 appintentsnltrainingprocessor[4750:18022] Starting AppIntents SSU YAML Generation
+2026-11-12 03:07:19.413 appintentsnltrainingprocessor[4750:18022] No AppShortcuts found - Skipping.
+
+RegisterExecutionPolicyException /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-RegisterExecutionPolicyException /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app
+
+Validate /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    builtin-validationUtility /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app -validate-for-store -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app (in target 'GasCam' from project 'GasCam')
+    cd /Users/runner/work/gasflow-demo/gasflow-demo
+    /usr/bin/touch -c /Users/runner/work/gasflow-demo/gasflow-demo/build/Release-iphoneos/GasCam.app
+
+** BUILD SUCCEEDED **
+
